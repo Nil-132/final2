@@ -1,7 +1,8 @@
-// server.js - FINAL FULL VERSION WITH ALL FEATURES (Corrected)
+// server.js - FINAL HIGH-SECURITY VERSION (All features + Maximum Security)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -13,17 +14,59 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
-app.use(express.json());
+// ====================== HIGH SECURITY SETUP ======================
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://cdn.tailwindcss.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+    },
+  },
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
+}));
+
+// CORS - Only your domains (Render + localhost)
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://final-djbd.onrender.com',
+    'https://final-1-2h61.onrender.com',
+    process.env.FRONTEND_URL
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json({ limit: '10kb' })); // Prevent large attacks
 app.use(express.static('public'));
 app.use(cookieParser());
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
-app.use('/api/', limiter);
+// Rate limiting
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: { success: false, msg: "Too many requests. Try again later." }
+});
 
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100
+});
+
+app.use('/api/send-otp', authLimiter);
+app.use('/api/signup', authLimiter);
+app.use('/api/login', authLimiter);
+app.use('/api/forgot-password', authLimiter);
+app.use('/api/', generalLimiter);
+
+// MongoDB
 mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log('✅ MongoDB Connected Successfully'))
-.catch(err => console.error('❌ MongoDB Error:', err));
+  .then(() => console.log('✅ MongoDB Connected Successfully'))
+  .catch(err => console.error('❌ MongoDB Error:', err));
 
 const User = require('./models/User');
 const Lecture = require('./models/Lecture');
@@ -32,8 +75,10 @@ const Progress = require('./models/Progress');
 const LiveSchedule = require('./models/LiveSchedule');
 const Subject = require('./models/Subject');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'my-super-secret-key-change-in-production-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("❌ JWT_SECRET is missing in .env file");
 
+// Nodemailer
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
@@ -58,9 +103,7 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
-// ====================== ADMIN SEED (Safer Version) ======================
-// Only runs once when server starts. You can comment this out after first use.
-// ====================== SEED ADMIN + SUBJECTS ======================
+// ====================== SEEDING (Always runs) ======================
 const seedAdmin = async () => {
   try {
     const adminEmail = "niles25521@gmail.com";
@@ -82,7 +125,6 @@ const seedAdmin = async () => {
   }
 };
 
-// Seed default 5 subjects (runs only if they are missing)
 const seedSubjects = async () => {
   try {
     const defaultSubjects = [
@@ -106,19 +148,18 @@ const seedSubjects = async () => {
   }
 };
 
-// Run both seeders when MongoDB connects
 mongoose.connection.once('open', async () => {
   await seedAdmin();
   await seedSubjects();
 });
-// ====================== ROUTES ======================
 
-// Live Today - Only current day's classes
+// ====================== ROUTES (All your features kept) ======================
+
+// Live Today
 app.get('/api/live/today', authenticate, async (req, res) => {
   try {
     const { date } = req.query;
-    const today = date || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
+    const today = date || new Date().toISOString().split('T')[0];
     const lives = await LiveSchedule.find({ date: today });
     res.json(lives);
   } catch (err) {
@@ -126,7 +167,7 @@ app.get('/api/live/today', authenticate, async (req, res) => {
   }
 });
 
-// Get single lecture by ID (for Update form - IMPORTANT for your Manage button)
+// Get single lecture
 app.get('/api/lectures/:id', authenticate, async (req, res) => {
   try {
     const lecture = await Lecture.findById(req.params.id);
@@ -137,7 +178,7 @@ app.get('/api/lectures/:id', authenticate, async (req, res) => {
   }
 });
 
-// Send OTP - Clean email
+// Send OTP
 app.post('/api/send-otp', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.json({ success: false, msg: "Email required" });
@@ -165,8 +206,7 @@ app.post('/api/send-otp', async (req, res) => {
     <p style="text-align: center; color: #9ca3af; font-size: 13px; margin-top: 25px;">
     If you didn't request this, please ignore this email.
     </p>
-    </div>
-    `
+    </div>`
   });
 
   res.json({ success: true, msg: "OTP sent successfully to your email" });
@@ -188,7 +228,7 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-// Login
+// Login with secure cookie
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -196,8 +236,15 @@ app.post('/api/login', async (req, res) => {
     if (!user || !(await user.comparePassword(password))) {
       return res.json({ success: false, msg: "Invalid email or password" });
     }
-    const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: true, maxAge: 7*24*60*60*1000 });
+    const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '24h' });
+    
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+    
     res.json({ success: true, msg: "Login successful", user: { name: user.name, role: user.role } });
   } catch (err) {
     res.status(500).json({ success: false, msg: "Server error" });
@@ -216,7 +263,7 @@ app.post('/api/forgot-password', async (req, res) => {
     user.resetPasswordExpires = Date.now() + 3600000;
     await user.save();
 
-    const resetLink = `http://localhost:3000/reset-password.html?token=${resetToken}`;
+    const resetLink = `https://final-djbd.onrender.com/reset-password.html?token=${resetToken}`;
 
     await transporter.sendMail({
       from: `"My PW" <${process.env.EMAIL_USER}>`,
@@ -228,8 +275,7 @@ app.post('/api/forgot-password', async (req, res) => {
       <a href="${resetLink}" style="display:inline-block; padding:12px 24px; background:#3b82f6; color:white; text-decoration:none; border-radius:8px; font-weight:600;">
       Reset Password
       </a>
-      <p style="margin-top:20px; color:#666;">This link expires in 1 hour.</p>
-      `
+      <p style="margin-top:20px; color:#666;">This link expires in 1 hour.</p>`
     });
 
     res.json({ success: true, msg: "Reset link sent to your email. Check your inbox." });
@@ -260,7 +306,7 @@ app.post('/api/reset-password', async (req, res) => {
 
 // Logout
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('token');
+  res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
   res.json({ success: true });
 });
 
@@ -280,19 +326,13 @@ app.get('/api/chapters', async (req, res) => {
   }
 });
 
-// Lectures with per-user progress
-// Lectures with per-user progress - Support both string ID and ObjectId
+// Lectures with progress
 app.get('/api/lectures', authenticate, async (req, res) => {
   try {
     const { chapterId, subjectId } = req.query;
     let filter = {};
-
-    if (chapterId) {
-      filter.chapterId = chapterId;
-    } else if (subjectId) {
-      // Support both old string IDs and new MongoDB _id
-      filter.subjectId = subjectId;
-    }
+    if (chapterId) filter.chapterId = chapterId;
+    else if (subjectId) filter.subjectId = subjectId;
 
     const lectures = await Lecture.find(filter);
     const progress = await Progress.find({ user: req.user.id });
@@ -300,7 +340,7 @@ app.get('/api/lectures', authenticate, async (req, res) => {
 
     const result = lectures.map(lec => ({
       ...lec.toObject(),
-                                        completed: !!completedMap.get(lec._id.toString())
+      completed: !!completedMap.get(lec._id.toString())
     }));
 
     res.json(result);
@@ -310,13 +350,13 @@ app.get('/api/lectures', authenticate, async (req, res) => {
   }
 });
 
-// Mark as completed
+// Mark lecture complete
 app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
   try {
     await Progress.findOneAndUpdate(
       { user: req.user.id, lecture: req.params.id },
       { completed: true, completedAt: new Date() },
-                                    { upsert: true }
+      { upsert: true }
     );
     res.json({ success: true });
   } catch (err) {
@@ -324,7 +364,7 @@ app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
   }
 });
 
-// Add new live schedule (admin only)
+// Live schedule routes
 app.post('/api/live', authenticate, isAdmin, async (req, res) => {
   try {
     const live = await LiveSchedule.create(req.body);
@@ -334,7 +374,6 @@ app.post('/api/live', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-// Delete live schedule (admin only)
 app.delete('/api/live/:id', authenticate, isAdmin, async (req, res) => {
   try {
     await LiveSchedule.findByIdAndDelete(req.params.id);
@@ -344,8 +383,7 @@ app.delete('/api/live/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-// ====================== SUBJECT ROUTES ======================
-// Get all subjects
+// Subjects routes
 app.get('/api/subjects', authenticate, async (req, res) => {
   try {
     const subjects = await Subject.find().sort({ order: 1 });
@@ -355,7 +393,6 @@ app.get('/api/subjects', authenticate, async (req, res) => {
   }
 });
 
-// Add new subject (Admin only)
 app.post('/api/subjects', authenticate, isAdmin, async (req, res) => {
   try {
     const subject = await Subject.create(req.body);
@@ -365,7 +402,6 @@ app.post('/api/subjects', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-// Delete subject (Admin only)
 app.delete('/api/subjects/:id', authenticate, isAdmin, async (req, res) => {
   try {
     await Subject.findByIdAndDelete(req.params.id);
@@ -375,7 +411,7 @@ app.delete('/api/subjects/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-// Admin CRUD
+// Admin CRUD routes
 app.post('/api/chapters', authenticate, isAdmin, async (req, res) => {
   try { res.json(await Chapter.create(req.body)); } catch (e) { res.status(500).json({success:false}); }
 });
@@ -400,5 +436,5 @@ app.put('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Full Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Secure server running on port ${PORT}`);
 });
