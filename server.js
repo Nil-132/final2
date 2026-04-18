@@ -106,12 +106,12 @@ const isAdmin = (req, res, next) => {
 // ====================== SEEDING (Always runs) ======================
 const seedAdmin = async () => {
   try {
-    const adminEmail = "niles25521@gmail.com";
-    const adminPassword = "nilesh2003";
+    const adminEmail = "your_email";
+    const adminPassword = "your_password";
     const existingAdmin = await User.findOne({ email: adminEmail });
     if (!existingAdmin) {
       await User.create({
-        name: "Nilesh Admin",
+        name: "Admin",
         email: adminEmail,
         password: adminPassword,
         role: "admin"
