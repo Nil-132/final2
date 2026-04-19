@@ -14,30 +14,37 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust proxy (needed for Render)
 app.set('trust proxy', 1);
 
-// CORS – allow same-origin and the Render frontend
-const allowedOrigins = [process.env.BASE_URL, 'http://localhost:3000'].filter(Boolean);
+// Dynamic CORS for production
+const allowedOrigins = [
+  'http://localhost:3000',
+  process.env.BASE_URL,
+  'https://your-app-name.onrender.com'  // Replace with your actual Render URL
+].filter(Boolean);
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public'))); // serve HTML from 'public'
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(cookieParser());
 
-// Rate limiting
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 app.use('/api/', limiter);
 
-// MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB Error:', err));
 
-// Models (all moved to /models folder)
+// Models
 const User = require('./models/User');
 const Lecture = require('./models/Lecture');
 const Chapter = require('./models/Chapter');
@@ -72,12 +79,12 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
-// ========== SEEDING (only if env vars provided) ==========
+// ========== SEEDING ==========
 const seedAdmin = async () => {
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminEmail || !adminPassword) {
-    console.log('⏩ Skipping admin seed (ADMIN_EMAIL/PASSWORD not set)');
+    console.log('⏩ Skipping admin seed');
     return;
   }
   const existing = await User.findOne({ email: adminEmail });
@@ -111,7 +118,6 @@ mongoose.connection.once('open', async () => {
 
 // ========== API ROUTES ==========
 
-// Get today's live classes
 app.get('/api/live/today', authenticate, async (req, res) => {
   try {
     const { date } = req.query;
@@ -123,7 +129,6 @@ app.get('/api/live/today', authenticate, async (req, res) => {
   }
 });
 
-// Get single lecture (for edit modal)
 app.get('/api/lectures/:id', authenticate, async (req, res) => {
   try {
     const lecture = await Lecture.findById(req.params.id);
@@ -134,7 +139,6 @@ app.get('/api/lectures/:id', authenticate, async (req, res) => {
   }
 });
 
-// Send OTP
 app.post('/api/send-otp', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.json({ success: false, msg: "Email required" });
@@ -163,7 +167,6 @@ app.post('/api/send-otp', async (req, res) => {
   }
 });
 
-// Signup
 app.post('/api/signup', async (req, res) => {
   const { name, email, password, otp } = req.body;
   const stored = otpStore.get(email);
@@ -179,7 +182,6 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-// Login
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -188,14 +190,18 @@ app.post('/api/login', async (req, res) => {
       return res.json({ success: false, msg: "Invalid email or password" });
     }
     const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: true, maxAge: 7*24*60*60*1000, sameSite: 'lax' });
+    res.cookie('token', token, {
+      httpOnly: true,
+      maxAge: 7*24*60*60*1000,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    });
     res.json({ success: true, msg: "Login successful", user: { name: user.name, role: user.role } });
   } catch (err) {
     res.status(500).json({ success: false, msg: "Server error" });
   }
 });
 
-// Forgot password
 app.post('/api/forgot-password', async (req, res) => {
   const { email } = req.body;
   try {
@@ -224,7 +230,6 @@ app.post('/api/forgot-password', async (req, res) => {
   }
 });
 
-// Reset password
 app.post('/api/reset-password', async (req, res) => {
   const { token, newPassword } = req.body;
   try {
@@ -244,18 +249,15 @@ app.post('/api/reset-password', async (req, res) => {
   }
 });
 
-// Logout
 app.post('/api/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ success: true });
 });
 
-// Get current user
 app.get('/api/me', authenticate, (req, res) => {
   res.json({ success: true, user: { name: req.user.name, role: req.user.role } });
 });
 
-// Chapters
 app.get('/api/chapters', async (req, res) => {
   try {
     const { subjectId } = req.query;
@@ -267,7 +269,6 @@ app.get('/api/chapters', async (req, res) => {
   }
 });
 
-// Lectures with progress
 app.get('/api/lectures', authenticate, async (req, res) => {
   try {
     const { chapterId, subjectId } = req.query;
@@ -289,7 +290,6 @@ app.get('/api/lectures', authenticate, async (req, res) => {
   }
 });
 
-// Mark lecture complete
 app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
   try {
     await Progress.findOneAndUpdate(
@@ -303,7 +303,6 @@ app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
   }
 });
 
-// Live schedule (admin only)
 app.post('/api/live', authenticate, isAdmin, async (req, res) => {
   try {
     const live = await LiveSchedule.create(req.body);
@@ -322,7 +321,6 @@ app.delete('/api/live/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-// Subject CRUD
 app.get('/api/subjects', authenticate, async (req, res) => {
   try {
     const subjects = await Subject.find().sort({ order: 1 });
@@ -350,7 +348,6 @@ app.delete('/api/subjects/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-// Admin chapter & lecture management
 app.post('/api/chapters', authenticate, isAdmin, async (req, res) => {
   try { res.json(await Chapter.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
 });
@@ -370,12 +367,16 @@ app.put('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
   res.json(lecture || { success: false });
 });
 
-// Catch-all: serve index.html for any unknown route (optional, but keeps SPA behaviour)
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ success: false, msg: 'Internal server error' });
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
