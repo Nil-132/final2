@@ -1,4 +1,4 @@
-// server.js - Production Ready for Render
+// server.js - Production Ready with Better Error Handling
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -40,9 +40,13 @@ app.use(cookieParser());
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 app.use('/api/', limiter);
 
+// MongoDB connection with better error handling
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB Error:', err));
+  .catch(err => {
+    console.error('❌ MongoDB Error:', err.message);
+    process.exit(1); // Exit if cannot connect to database
+  });
 
 // Models
 const User = require('./models/User');
@@ -54,11 +58,16 @@ const Subject = require('./models/Subject');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
 
-// Email transporter
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-});
+// Email transporter (optional)
+let transporter = null;
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+  });
+} else {
+  console.warn('⚠️ Email not configured – OTP and password reset will not work');
+}
 
 const otpStore = new Map();
 
@@ -84,7 +93,7 @@ const seedAdmin = async () => {
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminEmail || !adminPassword) {
-    console.log('⏩ Skipping admin seed');
+    console.log('⏩ Skipping admin seed (no ADMIN_EMAIL/PASSWORD)');
     return;
   }
   const existing = await User.findOne({ email: adminEmail });
@@ -125,6 +134,7 @@ app.get('/api/live/today', authenticate, async (req, res) => {
     const lives = await LiveSchedule.find({ date: today });
     res.json(lives);
   } catch (err) {
+    console.error(err);
     res.status(500).json([]);
   }
 });
@@ -135,6 +145,7 @@ app.get('/api/lectures/:id', authenticate, async (req, res) => {
     if (!lecture) return res.status(404).json({ success: false, msg: "Not found" });
     res.json(lecture);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, msg: "Failed to fetch lecture" });
   }
 });
@@ -143,6 +154,7 @@ app.post('/api/send-otp', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.json({ success: false, msg: "Email required" });
   if (await User.findOne({ email })) return res.json({ success: false, msg: "Email already registered" });
+  if (!transporter) return res.json({ success: false, msg: "Email service not configured" });
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   otpStore.set(email, { otp, expires: Date.now() + 10 * 60 * 1000 });
@@ -178,15 +190,24 @@ app.post('/api/signup', async (req, res) => {
     otpStore.delete(email);
     res.json({ success: true, msg: "Account created! You can now login." });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, msg: "Registration failed" });
   }
 });
 
+// LOGIN ROUTE – with detailed error handling
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
+  console.log(`Login attempt for: ${email}`);
   try {
     const user = await User.findOne({ email });
-    if (!user || !(await user.comparePassword(password))) {
+    if (!user) {
+      console.log(`User not found: ${email}`);
+      return res.json({ success: false, msg: "Invalid email or password" });
+    }
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      console.log(`Password mismatch for: ${email}`);
       return res.json({ success: false, msg: "Invalid email or password" });
     }
     const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
@@ -198,12 +219,14 @@ app.post('/api/login', async (req, res) => {
     });
     res.json({ success: true, msg: "Login successful", user: { name: user.name, role: user.role } });
   } catch (err) {
-    res.status(500).json({ success: false, msg: "Server error" });
+    console.error("Login error:", err);
+    res.status(500).json({ success: false, msg: "Server error. Please try again later." });
   }
 });
 
 app.post('/api/forgot-password', async (req, res) => {
   const { email } = req.body;
+  if (!transporter) return res.json({ success: false, msg: "Email service not configured" });
   try {
     const user = await User.findOne({ email });
     if (!user) return res.json({ success: false, msg: "No account found" });
@@ -226,6 +249,7 @@ app.post('/api/forgot-password', async (req, res) => {
     });
     res.json({ success: true, msg: "Reset link sent to your email." });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, msg: "Failed to send reset email" });
   }
 });
@@ -245,6 +269,7 @@ app.post('/api/reset-password', async (req, res) => {
     await user.save();
     res.json({ success: true, msg: "Password reset successful!" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, msg: "Failed to reset password" });
   }
 });
@@ -265,6 +290,7 @@ app.get('/api/chapters', async (req, res) => {
     const chapters = await Chapter.find(filter).sort({ order: 1 });
     res.json(chapters);
   } catch (err) {
+    console.error(err);
     res.status(500).json([]);
   }
 });
@@ -286,6 +312,7 @@ app.get('/api/lectures', authenticate, async (req, res) => {
     }));
     res.json(result);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, msg: "Failed to load lectures" });
   }
 });
@@ -299,6 +326,7 @@ app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false });
   }
 });
@@ -308,6 +336,7 @@ app.post('/api/live', authenticate, isAdmin, async (req, res) => {
     const live = await LiveSchedule.create(req.body);
     res.json({ success: true, live });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false });
   }
 });
@@ -317,6 +346,7 @@ app.delete('/api/live/:id', authenticate, isAdmin, async (req, res) => {
     await LiveSchedule.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false });
   }
 });
@@ -326,6 +356,7 @@ app.get('/api/subjects', authenticate, async (req, res) => {
     const subjects = await Subject.find().sort({ order: 1 });
     res.json(subjects);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false });
   }
 });
@@ -335,6 +366,7 @@ app.post('/api/subjects', authenticate, isAdmin, async (req, res) => {
     const subject = await Subject.create(req.body);
     res.json({ success: true, subject });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, msg: err.message });
   }
 });
@@ -344,15 +376,16 @@ app.delete('/api/subjects/:id', authenticate, isAdmin, async (req, res) => {
     await Subject.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false });
   }
 });
 
 app.post('/api/chapters', authenticate, isAdmin, async (req, res) => {
-  try { res.json(await Chapter.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
+  try { res.json(await Chapter.create(req.body)); } catch (e) { console.error(e); res.status(500).json({ success: false }); }
 });
 app.post('/api/lectures', authenticate, isAdmin, async (req, res) => {
-  try { res.json(await Lecture.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
+  try { res.json(await Lecture.create(req.body)); } catch (e) { console.error(e); res.status(500).json({ success: false }); }
 });
 app.delete('/api/chapters/:id', authenticate, isAdmin, async (req, res) => {
   await Chapter.findByIdAndDelete(req.params.id);
@@ -369,7 +402,7 @@ app.put('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Global error:', err.stack);
   res.status(500).json({ success: false, msg: 'Internal server error' });
 });
 
