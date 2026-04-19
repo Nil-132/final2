@@ -44,10 +44,6 @@
       <a href="forgot-password.html" class="text-blue-600 hover:underline">Forgot Password?</a>
       <a href="signup.html" class="text-blue-600 hover:underline">Create Account</a>
     </div>
-
-    <div class="mt-8 p-5 bg-gray-50 rounded-2xl text-sm text-center">
-      <p class="font-medium text-gray-700">Need help? Contact support.</p>
-    </div>
   </div>
 
   <script>
@@ -79,7 +75,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
-          credentials: 'include'   // Important for JWT cookie
+          credentials: 'include'
         });
 
         const data = await res.json();
