@@ -87,9 +87,18 @@
   <script>
     let isAdmin = false;
 
+    async function authFetch(url, options = {}) {
+      const res = await fetch(url, { ...options, credentials: 'include' });
+      if (res.status === 401) {
+        window.location.href = '/login.html';
+        throw new Error('Unauthorized');
+      }
+      return res;
+    }
+
     async function checkAdmin() {
       try {
-        const res = await fetch('/api/me', { credentials: 'include' });
+        const res = await authFetch('/api/me');
         const data = await res.json();
         if (data.success) {
           document.getElementById('user-name').textContent = data.user.name || 'Student';
@@ -105,15 +114,13 @@
       }
     }
 
-        async function renderSubjects() {
+    async function renderSubjects() {
       const container = document.getElementById('subjects-container');
       container.innerHTML = '<p class="col-span-3 text-center py-12 text-gray-500">Loading subjects...</p>';
-
       try {
-        const res = await fetch('/api/subjects', { credentials: 'include' });
+        const res = await authFetch('/api/subjects');
         let subjects = await res.json();
 
-        // If backend returns empty, use your original 5 as base
         if (!subjects || subjects.length === 0) {
           subjects = [
             { id: "quant", name: "Quantitative Aptitude", color: "blue", icon: "📊" },
@@ -125,8 +132,6 @@
         }
 
         let html = '';
-
-        // First show the original 5 subjects
         const originalSubjects = [
           { id: "quant", name: "Quantitative Aptitude", color: "blue", icon: "📊" },
           { id: "reasoning", name: "Reasoning Ability", color: "purple", icon: "🧠" },
@@ -138,14 +143,12 @@
         for (let sub of originalSubjects) {
           let total = 0, progress = 0;
           try {
-            const lecRes = await fetch(`/api/lectures?subjectId=${sub.id}`, { credentials: 'include' });
-            if (lecRes.ok) {
-              const lectures = await lecRes.json();
-              total = lectures.length;
-              const completed = lectures.filter(l => l.completed === true).length;
-              progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-            }
-          } catch (e) {}
+            const lecRes = await authFetch(`/api/lectures?subjectId=${sub.id}`);
+            const lectures = await lecRes.json();
+            total = lectures.length;
+            const completed = lectures.filter(l => l.completed === true).length;
+            progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+          } catch (e) { console.warn(e); }
 
           html += `
             <div class="subject-card bg-white rounded-3xl p-8 border border-gray-100 relative">
@@ -167,22 +170,17 @@
             </div>`;
         }
 
-        // Then show newly added subjects at the end
         for (let sub of subjects) {
           const subjectId = sub._id || sub.id;
-          // Skip if it's one of the original 5 (to avoid duplicates)
           if (originalSubjects.some(o => o.name === sub.name)) continue;
-
           let total = 0, progress = 0;
           try {
-            const lecRes = await fetch(`/api/lectures?subjectId=${subjectId}`, { credentials: 'include' });
-            if (lecRes.ok) {
-              const lectures = await lecRes.json();
-              total = lectures.length;
-              const completed = lectures.filter(l => l.completed === true).length;
-              progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-            }
-          } catch (e) {}
+            const lecRes = await authFetch(`/api/lectures?subjectId=${subjectId}`);
+            const lectures = await lecRes.json();
+            total = lectures.length;
+            const completed = lectures.filter(l => l.completed === true).length;
+            progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+          } catch (e) { console.warn(e); }
 
           html += `
             <div class="subject-card bg-white rounded-3xl p-8 border border-gray-100 relative">
@@ -207,7 +205,7 @@
         container.innerHTML = html;
       } catch (err) {
         console.error(err);
-        container.innerHTML = `<p class="col-span-3 text-center py-12 text-red-500">Could not load subjects from server.</p>`;
+        container.innerHTML = `<p class="col-span-3 text-center py-12 text-red-500">Could not load subjects. Please refresh the page.</p>`;
       }
     }
 
@@ -215,63 +213,41 @@
       window.location.href = `/lectures.html?subjectId=${subjectId}&subjectName=${encodeURIComponent(subjectName)}`;
     }
 
-    function showAddSubjectModal() {
-      document.getElementById('add-subject-modal').classList.remove('hidden');
-    }
+    function showAddSubjectModal() { document.getElementById('add-subject-modal').classList.remove('hidden'); }
+    function hideAddSubjectModal() { document.getElementById('add-subject-modal').classList.add('hidden'); }
 
-    function hideAddSubjectModal() {
-      document.getElementById('add-subject-modal').classList.add('hidden');
-    }
-
-    // ==================== NEW: Real Backend Integration ====================
     async function addNewSubject() {
       const name = document.getElementById('new-subject-name').value.trim();
       const icon = document.getElementById('new-subject-icon').value.trim() || "📚";
       const colorSelect = document.getElementById('new-subject-color').value;
-
-      if (!name) {
-        alert("Please enter subject name");
-        return;
-      }
-
+      if (!name) { alert("Please enter subject name"); return; }
       try {
-        const res = await fetch('/api/subjects', {
+        const res = await authFetch('/api/subjects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            name: name,
-            icon: icon,
-            color: colorSelect
-          })
+          body: JSON.stringify({ name, icon, color: colorSelect })
         });
-
         const data = await res.json();
         if (data.success) {
           alert(`✅ Subject "${name}" added successfully!`);
           hideAddSubjectModal();
-          renderSubjects();        // Refresh the page to show new subject
+          await renderSubjects();
         } else {
           alert(data.msg || "Failed to add subject");
         }
       } catch (err) {
-        alert("Server error while adding subject. Make sure server is running.");
+        alert("Server error while adding subject.");
       }
     }
 
     async function deleteSubject(subjectId) {
       if (!confirm(`Delete subject "${subjectId}" and all its lectures?`)) return;
-
       try {
-        const res = await fetch(`/api/subjects/${subjectId}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
-
+        const res = await authFetch(`/api/subjects/${subjectId}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.success) {
-          alert(`🗑️ Subject "${subjectId}" deleted successfully!`);
-          renderSubjects();
+          alert(`🗑️ Subject deleted successfully!`);
+          await renderSubjects();
         } else {
           alert("Failed to delete subject");
         }
@@ -279,16 +255,11 @@
         alert("Server error while deleting subject");
       }
     }
-    // =====================================================================
 
     async function logout() {
       if (!confirm("Are you sure you want to logout?")) return;
-      try {
-        await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-        window.location.href = '/login.html';
-      } catch (err) {
-        alert("Logout failed.");
-      }
+      await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+      window.location.href = '/login.html';
     }
 
     window.onload = async () => {
