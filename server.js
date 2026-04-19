@@ -16,10 +16,10 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // SIMPLIFIED CORS - allows all origins (since frontend/backend are same domain)
-app.use(cors({
-  origin: true,        // This allows any origin – safe for same-domain requests
-  credentials: true
-}));
+//app.use(cors({
+//  origin: true,        // This allows any origin – safe for same-domain requests
+//  credentials: true
+//}));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
