@@ -56,7 +56,6 @@
 </head>
 <body class="bg-gray-50">
 
-<!-- Overlay -->
 <div id="overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/50 z-50 md:hidden"></div>
 
 <div class="flex h-screen overflow-hidden">
@@ -177,8 +176,8 @@
   <div class="bg-white rounded-3xl p-8 w-full max-w-sm mx-4">
     <h3 class="text-xl font-semibold mb-4">Admin Login</h3>
     <p class="text-gray-600 mb-6">Use your admin account</p>
-    <input type="email" id="adminEmail" placeholder="Admin Email" value="" class="w-full border border-gray-300 rounded-2xl px-5 py-4 mb-3">
-    <input type="password" id="adminPass" placeholder="Password" value="" class="w-full border border-gray-300 rounded-2xl px-5 py-4 mb-6">
+    <input type="email" id="adminEmail" placeholder="Admin Email" class="w-full border border-gray-300 rounded-2xl px-5 py-4 mb-3">
+    <input type="password" id="adminPass" placeholder="Password" class="w-full border border-gray-300 rounded-2xl px-5 py-4 mb-6">
     <div class="flex gap-3">
       <button onclick="hideLoginModal()" class="flex-1 py-4 border border-gray-300 rounded-2xl font-medium">Cancel</button>
       <button onclick="adminLogin()" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-semibold">Login as Admin</button>
@@ -187,7 +186,6 @@
 </div>
 
 <script>
-// ============== CONFIGURATION ==============
 const urlParams = new URLSearchParams(window.location.search);
 const subjectId = urlParams.get('subjectId');
 const subjectName = urlParams.get('subjectName') || 'All Classes';
@@ -200,11 +198,18 @@ let allLectures = [];
 let currentPdfLink = '';
 let currentDppLink = '';
 
-// ====================== AUTH ======================
+async function authFetch(url, options = {}) {
+  const res = await fetch(url, { ...options, credentials: 'include' });
+  if (res.status === 401) {
+    window.location.href = '/login.html';
+    throw new Error('Unauthorized');
+  }
+  return res;
+}
+
 async function checkAuth() {
   try {
-    const res = await fetch('/api/me', { credentials: 'include' });
-    if (!res.ok) throw new Error();
+    const res = await authFetch('/api/me');
     const data = await res.json();
     if (data.success && data.user.role === 'admin') {
       document.getElementById('manage-btn').classList.remove('hidden');
@@ -228,23 +233,22 @@ function toggleSidebar() {
   overlay.classList.toggle('hidden');
 }
 
-// ============== LOAD DATA ==============
 async function loadData() {
   if (!subjectId) {
     document.getElementById('main-content').innerHTML = `<p class="text-center text-red-500 py-20">No subject selected.</p>`;
     return;
   }
   try {
-    const chaptersRes = await fetch(`/api/chapters?subjectId=${subjectId}`, { credentials: 'include' });
+    const chaptersRes = await authFetch(`/api/chapters?subjectId=${subjectId}`);
     const chapters = await chaptersRes.json();
 
     let lectures = [];
     if (currentChapterId) {
-      const lecturesRes = await fetch(`/api/lectures?chapterId=${currentChapterId}`, { credentials: 'include' });
+      const lecturesRes = await authFetch(`/api/lectures?chapterId=${currentChapterId}`);
       lectures = await lecturesRes.json();
     } else if (chapters.length > 0) {
       currentChapterId = chapters[0]._id;
-      const lecturesRes = await fetch(`/api/lectures?chapterId=${currentChapterId}`, { credentials: 'include' });
+      const lecturesRes = await authFetch(`/api/lectures?chapterId=${currentChapterId}`);
       lectures = await lecturesRes.json();
     }
 
@@ -253,7 +257,7 @@ async function loadData() {
     renderLectures(lectures);
   } catch (err) {
     console.error(err);
-    document.getElementById('main-content').innerHTML = `<p class="text-center text-red-500 py-20">Failed to load data. Please login again.</p>`;
+    document.getElementById('main-content').innerHTML = `<p class="text-center text-red-500 py-20">Failed to load data. Please refresh the page.</p>`;
   }
 }
 
@@ -277,7 +281,7 @@ function renderLectures(lectures) {
   const container = document.getElementById('main-content');
   let html = '';
   if (lectures.length === 0) {
-    container.innerHTML = `<p class="text-center text-gray-500 py-20">No lectures found.</p>`;
+    container.innerHTML = `<p class="text-center text-gray-500 py-20">No lectures found in this chapter.</p>`;
     return;
   }
   lectures.forEach(lec => {
@@ -311,7 +315,6 @@ function renderLectures(lectures) {
   container.innerHTML = html;
 }
 
-// Notes & DPP Modal
 function showNotesModal(pdfLink, dppLink) {
   currentPdfLink = pdfLink;
   currentDppLink = dppLink;
@@ -322,19 +325,9 @@ function showNotesModal(pdfLink, dppLink) {
   document.getElementById('notes-modal').classList.remove('hidden');
 }
 
-function hideNotesModal() {
-  document.getElementById('notes-modal').classList.add('hidden');
-}
-
-function openPdf() {
-  if (currentPdfLink) window.open(currentPdfLink, '_blank');
-  hideNotesModal();
-}
-
-function openDpp() {
-  if (currentDppLink) window.open(currentDppLink, '_blank');
-  hideNotesModal();
-}
+function hideNotesModal() { document.getElementById('notes-modal').classList.add('hidden'); }
+function openPdf() { if (currentPdfLink) window.open(currentPdfLink, '_blank'); hideNotesModal(); }
+function openDpp() { if (currentDppLink) window.open(currentDppLink, '_blank'); hideNotesModal(); }
 
 function applyFilters() {
   const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
@@ -356,10 +349,7 @@ function playVideo(videoId) {
 
 async function markLectureComplete(lectureId) {
   try {
-    const res = await fetch(`/api/lectures/${lectureId}/complete`, {
-      method: 'POST',
-      credentials: 'include'
-    });
+    const res = await authFetch(`/api/lectures/${lectureId}/complete`, { method: 'POST' });
     const data = await res.json();
     if (data.success) loadData();
     else alert(data.msg || "Failed to mark completed");
@@ -376,21 +366,9 @@ function selectChapter(chapterId) {
   if (window.innerWidth < 768) toggleSidebar();
 }
 
-// ====================== MANAGE MODAL ======================
-function showManageModal() {
-  manageMode = 1;
-  document.getElementById('manage-modal').classList.remove('hidden');
-  updateManageUI();
-}
-
-function hideManageModal() {
-  document.getElementById('manage-modal').classList.add('hidden');
-}
-
-function setManageMode(mode) {
-  manageMode = mode;
-  updateManageUI();
-}
+function showManageModal() { manageMode = 1; document.getElementById('manage-modal').classList.remove('hidden'); updateManageUI(); }
+function hideManageModal() { document.getElementById('manage-modal').classList.add('hidden'); }
+function setManageMode(mode) { manageMode = mode; updateManageUI(); }
 
 function updateManageUI() {
   for (let i = 1; i <= 5; i++) {
@@ -399,24 +377,21 @@ function updateManageUI() {
   }
   const activeBtn = document.getElementById(`btn${manageMode}`);
   if (activeBtn) activeBtn.classList.add('manage-btn-active');
-
   for (let i = 1; i <= 5; i++) {
     const form = document.getElementById(`form${i}`);
     if (form) form.classList.toggle('hidden', i !== manageMode);
   }
-
   if (manageMode === 2) populateLectureChapterSelect();
   if (manageMode === 3) populateDeleteChapterSelect();
   if (manageMode === 4) populateDeleteLectureChapterSelect();
   if (manageMode === 5) populateUpdateChapterSelect();
 }
 
-// Populate functions (kept as you had)
 async function populateLectureChapterSelect() {
   const select = document.getElementById('lecture-chapter-select');
   select.innerHTML = '<option value="">Select Chapter</option>';
   try {
-    const res = await fetch(`/api/chapters?subjectId=${subjectId}`, { credentials: 'include' });
+    const res = await authFetch(`/api/chapters?subjectId=${subjectId}`);
     const chapters = await res.json();
     chapters.forEach(ch => {
       const opt = document.createElement('option');
@@ -424,14 +399,14 @@ async function populateLectureChapterSelect() {
       opt.textContent = ch.title;
       select.appendChild(opt);
     });
-  } catch (e) {}
+  } catch (e) { console.error(e); }
 }
 
 async function populateDeleteChapterSelect() {
   const select = document.getElementById('delete-chapter-select');
   select.innerHTML = '<option value="">Select Chapter to Delete</option>';
   try {
-    const res = await fetch(`/api/chapters?subjectId=${subjectId}`, { credentials: 'include' });
+    const res = await authFetch(`/api/chapters?subjectId=${subjectId}`);
     const chapters = await res.json();
     chapters.forEach(ch => {
       const opt = document.createElement('option');
@@ -439,14 +414,14 @@ async function populateDeleteChapterSelect() {
       opt.textContent = ch.title;
       select.appendChild(opt);
     });
-  } catch (e) {}
+  } catch (e) { console.error(e); }
 }
 
 async function populateDeleteLectureChapterSelect() {
   const select = document.getElementById('delete-lecture-chapter');
   select.innerHTML = '<option value="">Select Chapter</option>';
   try {
-    const res = await fetch(`/api/chapters?subjectId=${subjectId}`, { credentials: 'include' });
+    const res = await authFetch(`/api/chapters?subjectId=${subjectId}`);
     const chapters = await res.json();
     chapters.forEach(ch => {
       const opt = document.createElement('option');
@@ -454,7 +429,7 @@ async function populateDeleteLectureChapterSelect() {
       opt.textContent = ch.title;
       select.appendChild(opt);
     });
-  } catch (e) {}
+  } catch (e) { console.error(e); }
 }
 
 async function updateDeleteLectureOptions() {
@@ -463,7 +438,7 @@ async function updateDeleteLectureOptions() {
   select.innerHTML = '<option value="">Select Lecture to Delete</option>';
   if (!chapterId) return;
   try {
-    const res = await fetch(`/api/lectures?chapterId=${chapterId}`, { credentials: 'include' });
+    const res = await authFetch(`/api/lectures?chapterId=${chapterId}`);
     const lectures = await res.json();
     lectures.forEach(lec => {
       const opt = document.createElement('option');
@@ -471,14 +446,14 @@ async function updateDeleteLectureOptions() {
       opt.textContent = lec.title;
       select.appendChild(opt);
     });
-  } catch (e) {}
+  } catch (e) { console.error(e); }
 }
 
 async function populateUpdateChapterSelect() {
   const select = document.getElementById('update-lecture-chapter');
   select.innerHTML = '<option value="">Select Chapter</option>';
   try {
-    const res = await fetch(`/api/chapters?subjectId=${subjectId}`, { credentials: 'include' });
+    const res = await authFetch(`/api/chapters?subjectId=${subjectId}`);
     const chapters = await res.json();
     chapters.forEach(ch => {
       const opt = document.createElement('option');
@@ -486,7 +461,7 @@ async function populateUpdateChapterSelect() {
       opt.textContent = ch.title;
       select.appendChild(opt);
     });
-  } catch (e) {}
+  } catch (e) { console.error(e); }
 }
 
 async function populateUpdateLectureSelect() {
@@ -495,7 +470,7 @@ async function populateUpdateLectureSelect() {
   select.innerHTML = '<option value="">Select Lecture to Update</option>';
   if (!chapterId) return;
   try {
-    const res = await fetch(`/api/lectures?chapterId=${chapterId}`, { credentials: 'include' });
+    const res = await authFetch(`/api/lectures?chapterId=${chapterId}`);
     const lectures = await res.json();
     lectures.forEach(lec => {
       const opt = document.createElement('option');
@@ -503,39 +478,30 @@ async function populateUpdateLectureSelect() {
       opt.textContent = lec.title;
       select.appendChild(opt);
     });
-  } catch (e) {}
+  } catch (e) { console.error(e); }
 }
 
-// FIXED: Load existing data when selecting a lecture for update
 async function loadLectureForUpdate() {
   const lectureId = document.getElementById('update-lecture-select').value;
   if (!lectureId) return;
-
   try {
-    const res = await fetch(`/api/lectures/${lectureId}`, { credentials: 'include' });
-    if (!res.ok) throw new Error('Lecture not found');
-
+    const res = await authFetch(`/api/lectures/${lectureId}`);
     const lec = await res.json();
-
     document.getElementById('update-title').value = lec.title || '';
     document.getElementById('update-youtube').value = lec.youtubeId || '';
     document.getElementById('update-image').value = lec.imageUrl || '';
     document.getElementById('update-pdf').value = lec.pdfLink || '';
     document.getElementById('update-dpp').value = lec.dppLink || '';
-
-    console.log("✅ Loaded existing data for lecture:", lec.title);
   } catch (e) {
-    console.error("Failed to load lecture data for update:", e);
-    alert("Could not load lecture details. Please try again.");
+    console.error(e);
+    alert("Could not load lecture details.");
   }
 }
 
-// Admin Login
 async function adminLogin() {
   const email = document.getElementById('adminEmail').value.trim();
   const password = document.getElementById('adminPass').value.trim();
   if (!email || !password) return alert("Please enter email and password");
-
   try {
     const res = await fetch('/api/login', {
       method: 'POST',
@@ -557,30 +523,25 @@ async function adminLogin() {
   }
 }
 
-function hideLoginModal() {
-  document.getElementById('loginModal').classList.add('hidden');
-}
+function hideLoginModal() { document.getElementById('loginModal').classList.add('hidden'); }
 
-// Execute Manage Action
 async function executeManageAction() {
   if (!isAdmin) {
     alert("Please login as Admin first");
     hideManageModal();
     return;
   }
-
   try {
-    if (manageMode === 1) { // Add Chapter
+    if (manageMode === 1) {
       const title = document.getElementById('chapter-title').value.trim();
       if (!title) return alert("Chapter title is required");
-      await fetch('/api/chapters', {
+      await authFetch('/api/chapters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subjectId, title, order: Date.now() }),
-        credentials: 'include'
+        body: JSON.stringify({ subjectId, title, order: Date.now() })
       });
     }
-    else if (manageMode === 2) { // Add Lecture
+    else if (manageMode === 2) {
       const title = document.getElementById('lecture-title').value.trim();
       const chapterId = document.getElementById('lecture-chapter-select').value;
       if (!title || !chapterId) return alert("Title and Chapter are required");
@@ -595,27 +556,25 @@ async function executeManageAction() {
         pdfLink: document.getElementById('lecture-pdf').value.trim(),
         dppLink: document.getElementById('lecture-dpp').value.trim()
       };
-      await fetch('/api/lectures', {
+      await authFetch('/api/lectures', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newLecture),
-        credentials: 'include'
+        body: JSON.stringify(newLecture)
       });
     }
-    else if (manageMode === 3) { // Delete Chapter
+    else if (manageMode === 3) {
       const chapterId = document.getElementById('delete-chapter-select').value;
       if (!chapterId || !confirm("Delete this chapter and all its lectures?")) return;
-      await fetch(`/api/chapters/${chapterId}`, { method: 'DELETE', credentials: 'include' });
+      await authFetch(`/api/chapters/${chapterId}`, { method: 'DELETE' });
     }
-    else if (manageMode === 4) { // Delete Lecture
+    else if (manageMode === 4) {
       const lectureId = document.getElementById('delete-lecture-select').value;
       if (!lectureId || !confirm("Delete this lecture?")) return;
-      await fetch(`/api/lectures/${lectureId}`, { method: 'DELETE', credentials: 'include' });
+      await authFetch(`/api/lectures/${lectureId}`, { method: 'DELETE' });
     }
-    else if (manageMode === 5) { // Update Lecture
+    else if (manageMode === 5) {
       const lectureId = document.getElementById('update-lecture-select').value;
       if (!lectureId) return alert("Please select a lecture to update");
-
       const updateData = {
         title: document.getElementById('update-title').value.trim(),
         youtubeId: document.getElementById('update-youtube').value.trim(),
@@ -623,29 +582,25 @@ async function executeManageAction() {
         pdfLink: document.getElementById('update-pdf').value.trim(),
         dppLink: document.getElementById('update-dpp').value.trim()
       };
-
-      await fetch(`/api/lectures/${lectureId}`, {
+      await authFetch(`/api/lectures/${lectureId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData),
-        credentials: 'include'
+        body: JSON.stringify(updateData)
       });
     }
-
     hideManageModal();
-    loadData(); // Refresh the page
+    await loadData();
     alert("Action completed successfully!");
   } catch (err) {
     console.error(err);
-    alert("Action failed. Please check console (F12) for details.");
+    alert("Action failed. Please try again.");
   }
 }
 
-// Initialize
 window.onload = async () => {
   await checkAuth();
   await loadData();
 };
 </script>
 </body>
-</html>
+  </html>
