@@ -1,8 +1,7 @@
-// server.js - FINAL HIGH-SECURITY VERSION (All features + Maximum Security)
+// server.js - Production Ready for Render
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -10,64 +9,35 @@ const cookieParser = require('cookie-parser');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ====================== HIGH SECURITY SETUP ======================
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://cdn.tailwindcss.com"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:"],
-    },
-  },
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
-}));
+// Trust proxy (needed for Render)
+app.set('trust proxy', 1);
 
-// CORS - Only your domains (Render + localhost)
+// CORS – allow same-origin and the Render frontend
+const allowedOrigins = [process.env.BASE_URL, 'http://localhost:3000'].filter(Boolean);
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://final-djbd.onrender.com',
-    'https://final-1-2h61.onrender.com',
-    process.env.FRONTEND_URL
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: allowedOrigins,
+  credentials: true
 }));
 
-app.use(express.json({ limit: '10kb' })); // Prevent large attacks
-app.use(express.static('public'));
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public'))); // serve HTML from 'public'
 app.use(cookieParser());
 
 // Rate limiting
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 8,
-  message: { success: false, msg: "Too many requests. Try again later." }
-});
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
+app.use('/api/', limiter);
 
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
-});
-
-app.use('/api/send-otp', authLimiter);
-app.use('/api/signup', authLimiter);
-app.use('/api/login', authLimiter);
-app.use('/api/forgot-password', authLimiter);
-app.use('/api/', generalLimiter);
-
-// MongoDB
+// MongoDB connection
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected Successfully'))
+  .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB Error:', err));
 
+// Models (all moved to /models folder)
 const User = require('./models/User');
 const Lecture = require('./models/Lecture');
 const Chapter = require('./models/Chapter');
@@ -75,10 +45,9 @@ const Progress = require('./models/Progress');
 const LiveSchedule = require('./models/LiveSchedule');
 const Subject = require('./models/Subject');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error("❌ JWT_SECRET is missing in .env file");
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
 
-// Nodemailer
+// Email transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
@@ -86,7 +55,7 @@ const transporter = nodemailer.createTransport({
 
 const otpStore = new Map();
 
-// ====================== MIDDLEWARE ======================
+// ========== MIDDLEWARE ==========
 const authenticate = (req, res, next) => {
   const token = req.cookies.token;
   if (!token) return res.status(401).json({ success: false, msg: "Please login" });
@@ -103,49 +72,36 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
-// ====================== SEEDING (Always runs) ======================
+// ========== SEEDING (only if env vars provided) ==========
 const seedAdmin = async () => {
-  try {
-    const adminEmail = "your_email";
-    const adminPassword = "your_password";
-    const existingAdmin = await User.findOne({ email: adminEmail });
-    if (!existingAdmin) {
-      await User.create({
-        name: "Admin",
-        email: adminEmail,
-        password: adminPassword,
-        role: "admin"
-      });
-      console.log(`✅ Admin account created: ${adminEmail}`);
-    } else {
-      console.log(`✅ Admin already exists`);
-    }
-  } catch (e) {
-    console.error("Admin seed error:", e.message);
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    console.log('⏩ Skipping admin seed (ADMIN_EMAIL/PASSWORD not set)');
+    return;
+  }
+  const existing = await User.findOne({ email: adminEmail });
+  if (!existing) {
+    await User.create({ name: "Admin", email: adminEmail, password: adminPassword, role: "admin" });
+    console.log(`✅ Admin created: ${adminEmail}`);
+  } else {
+    console.log(`✅ Admin already exists`);
   }
 };
 
 const seedSubjects = async () => {
-  try {
-    const defaultSubjects = [
-      { name: "Quantitative Aptitude", icon: "📊", color: "blue", order: 1 },
-      { name: "Reasoning Ability", icon: "🧠", color: "purple", order: 2 },
-      { name: "English Language", icon: "📖", color: "pink", order: 3 },
-      { name: "Banking Awareness", icon: "🏦", color: "emerald", order: 4 },
-      { name: "Current Affairs", icon: "📰", color: "orange", order: 5 }
-    ];
-
-    for (let sub of defaultSubjects) {
-      const exists = await Subject.findOne({ name: sub.name });
-      if (!exists) {
-        await Subject.create(sub);
-        console.log(`✅ Added default subject: ${sub.name}`);
-      }
-    }
-    console.log("✅ All 5 default subjects are now in the database");
-  } catch (e) {
-    console.error("Subject seed error:", e.message);
+  const defaultSubjects = [
+    { name: "Quantitative Aptitude", icon: "📊", color: "blue", order: 1 },
+    { name: "Reasoning Ability", icon: "🧠", color: "purple", order: 2 },
+    { name: "English Language", icon: "📖", color: "pink", order: 3 },
+    { name: "Banking Awareness", icon: "🏦", color: "emerald", order: 4 },
+    { name: "Current Affairs", icon: "📰", color: "orange", order: 5 }
+  ];
+  for (let sub of defaultSubjects) {
+    const exists = await Subject.findOne({ name: sub.name });
+    if (!exists) await Subject.create(sub);
   }
+  console.log("✅ Default subjects seeded");
 };
 
 mongoose.connection.once('open', async () => {
@@ -153,9 +109,9 @@ mongoose.connection.once('open', async () => {
   await seedSubjects();
 });
 
-// ====================== ROUTES (All your features kept) ======================
+// ========== API ROUTES ==========
 
-// Live Today
+// Get today's live classes
 app.get('/api/live/today', authenticate, async (req, res) => {
   try {
     const { date } = req.query;
@@ -167,11 +123,11 @@ app.get('/api/live/today', authenticate, async (req, res) => {
   }
 });
 
-// Get single lecture
+// Get single lecture (for edit modal)
 app.get('/api/lectures/:id', authenticate, async (req, res) => {
   try {
     const lecture = await Lecture.findById(req.params.id);
-    if (!lecture) return res.status(404).json({ success: false, msg: "Lecture not found" });
+    if (!lecture) return res.status(404).json({ success: false, msg: "Not found" });
     res.json(lecture);
   } catch (err) {
     res.status(500).json({ success: false, msg: "Failed to fetch lecture" });
@@ -187,29 +143,24 @@ app.post('/api/send-otp', async (req, res) => {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   otpStore.set(email, { otp, expires: Date.now() + 10 * 60 * 1000 });
 
-  await transporter.sendMail({
-    from: `"My PW - Online Classes" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: "Your Signup OTP - My PW",
-    html: `
-    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; background: #f8fafc; border-radius: 12px;">
-    <h2 style="color: #1e40af; text-align: center;">My PW</h2>
-    <p style="text-align: center; color: #374151; font-size: 16px;">Your One-Time Password for Signup</p>
-    <div style="background: white; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; border: 2px solid #bfdbfe;">
-    <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Your OTP is</p>
-    <h1 style="font-size: 42px; letter-spacing: 8px; font-weight: bold; color: #1e40af; margin: 0;">${otp}</h1>
-    </div>
-    <p style="text-align: center; color: #6b7280; font-size: 14px;">
-    This code is valid for <strong>10 minutes</strong>.<br>
-    Do not share this OTP with anyone.
-    </p>
-    <p style="text-align: center; color: #9ca3af; font-size: 13px; margin-top: 25px;">
-    If you didn't request this, please ignore this email.
-    </p>
-    </div>`
-  });
-
-  res.json({ success: true, msg: "OTP sent successfully to your email" });
+  try {
+    await transporter.sendMail({
+      from: `"My PW" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Your Signup OTP - My PW",
+      html: `<div style="font-family: Arial; max-width:500px; margin:auto; padding:20px; background:#f8fafc; border-radius:12px;">
+              <h2 style="color:#1e40af; text-align:center;">My PW</h2>
+              <div style="background:white; padding:20px; border-radius:10px; text-align:center;">
+                <h1 style="font-size:42px; letter-spacing:8px; color:#1e40af;">${otp}</h1>
+              </div>
+              <p style="text-align:center;">Valid for 10 minutes.</p>
+             </div>`
+    });
+    res.json({ success: true, msg: "OTP sent" });
+  } catch (err) {
+    console.error("Email error:", err);
+    res.json({ success: false, msg: "Failed to send OTP. Check email configuration." });
+  }
 });
 
 // Signup
@@ -228,7 +179,7 @@ app.post('/api/signup', async (req, res) => {
   }
 });
 
-// Login with secure cookie
+// Login
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -236,55 +187,44 @@ app.post('/api/login', async (req, res) => {
     if (!user || !(await user.comparePassword(password))) {
       return res.json({ success: false, msg: "Invalid email or password" });
     }
-    const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '24h' });
-    
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000
-    });
-    
+    const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, maxAge: 7*24*60*60*1000, sameSite: 'lax' });
     res.json({ success: true, msg: "Login successful", user: { name: user.name, role: user.role } });
   } catch (err) {
     res.status(500).json({ success: false, msg: "Server error" });
   }
 });
 
-// Forgot Password
+// Forgot password
 app.post('/api/forgot-password', async (req, res) => {
   const { email } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.json({ success: false, msg: "No account found with this email" });
+    if (!user) return res.json({ success: false, msg: "No account found" });
 
     const resetToken = crypto.randomBytes(32).toString('hex');
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpires = Date.now() + 3600000;
     await user.save();
 
-    const resetLink = `https://final-djbd.onrender.com/reset-password.html?token=${resetToken}`;
+    const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    const resetLink = `${baseUrl}/reset-password.html?token=${resetToken}`;
 
     await transporter.sendMail({
       from: `"My PW" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Reset Your My PW Password",
-      html: `
-      <h2>Reset Your Password</h2>
-      <p>Click the button below to reset your password:</p>
-      <a href="${resetLink}" style="display:inline-block; padding:12px 24px; background:#3b82f6; color:white; text-decoration:none; border-radius:8px; font-weight:600;">
-      Reset Password
-      </a>
-      <p style="margin-top:20px; color:#666;">This link expires in 1 hour.</p>`
+      subject: "Reset Your Password",
+      html: `<h2>Reset Password</h2>
+             <p>Click <a href="${resetLink}">here</a> to reset your password.</p>
+             <p>This link expires in 1 hour.</p>`
     });
-
-    res.json({ success: true, msg: "Reset link sent to your email. Check your inbox." });
+    res.json({ success: true, msg: "Reset link sent to your email." });
   } catch (err) {
     res.status(500).json({ success: false, msg: "Failed to send reset email" });
   }
 });
 
-// Reset Password
+// Reset password
 app.post('/api/reset-password', async (req, res) => {
   const { token, newPassword } = req.body;
   try {
@@ -306,10 +246,11 @@ app.post('/api/reset-password', async (req, res) => {
 
 // Logout
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
+  res.clearCookie('token');
   res.json({ success: true });
 });
 
+// Get current user
 app.get('/api/me', authenticate, (req, res) => {
   res.json({ success: true, user: { name: req.user.name, role: req.user.role } });
 });
@@ -342,10 +283,8 @@ app.get('/api/lectures', authenticate, async (req, res) => {
       ...lec.toObject(),
       completed: !!completedMap.get(lec._id.toString())
     }));
-
     res.json(result);
   } catch (err) {
-    console.error("Lectures fetch error:", err);
     res.status(500).json({ success: false, msg: "Failed to load lectures" });
   }
 });
@@ -364,7 +303,7 @@ app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
   }
 });
 
-// Live schedule routes
+// Live schedule (admin only)
 app.post('/api/live', authenticate, isAdmin, async (req, res) => {
   try {
     const live = await LiveSchedule.create(req.body);
@@ -379,17 +318,17 @@ app.delete('/api/live/:id', authenticate, isAdmin, async (req, res) => {
     await LiveSchedule.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, msg: "Failed to delete" });
+    res.status(500).json({ success: false });
   }
 });
 
-// Subjects routes
+// Subject CRUD
 app.get('/api/subjects', authenticate, async (req, res) => {
   try {
     const subjects = await Subject.find().sort({ order: 1 });
     res.json(subjects);
   } catch (err) {
-    res.status(500).json({ success: false, msg: "Failed to load subjects" });
+    res.status(500).json({ success: false });
   }
 });
 
@@ -398,7 +337,7 @@ app.post('/api/subjects', authenticate, isAdmin, async (req, res) => {
     const subject = await Subject.create(req.body);
     res.json({ success: true, subject });
   } catch (err) {
-    res.status(500).json({ success: false, msg: err.message || "Failed to create subject" });
+    res.status(500).json({ success: false, msg: err.message });
   }
 });
 
@@ -407,34 +346,36 @@ app.delete('/api/subjects/:id', authenticate, isAdmin, async (req, res) => {
     await Subject.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, msg: "Failed to delete subject" });
+    res.status(500).json({ success: false });
   }
 });
 
-// Admin CRUD routes
+// Admin chapter & lecture management
 app.post('/api/chapters', authenticate, isAdmin, async (req, res) => {
-  try { res.json(await Chapter.create(req.body)); } catch (e) { res.status(500).json({success:false}); }
+  try { res.json(await Chapter.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
 });
-
 app.post('/api/lectures', authenticate, isAdmin, async (req, res) => {
-  try { res.json(await Lecture.create(req.body)); } catch (e) { res.status(500).json({success:false}); }
+  try { res.json(await Lecture.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
 });
-
 app.delete('/api/chapters/:id', authenticate, isAdmin, async (req, res) => {
   await Chapter.findByIdAndDelete(req.params.id);
-  res.json({success:true});
+  res.json({ success: true });
 });
-
 app.delete('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
   await Lecture.findByIdAndDelete(req.params.id);
-  res.json({success:true});
+  res.json({ success: true });
 });
-
 app.put('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
   const lecture = await Lecture.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  res.json(lecture || {success:false});
+  res.json(lecture || { success: false });
 });
 
+// Catch-all: serve index.html for any unknown route (optional, but keeps SPA behaviour)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Secure server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
