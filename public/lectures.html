@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <style>
-    /* Your existing styles (unchanged) */
+    /* All existing styles (unchanged - keep your current CSS) */
     body { font-family: system-ui, -apple-system, sans-serif; }
     .chapter-item:hover { background-color: #f8fafc; }
     .active-chapter {
@@ -77,7 +77,6 @@
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
-    /* Video player styles */
     .video-modal-overlay {
       background: rgba(0, 0, 0, 0.85);
       backdrop-filter: blur(8px);
@@ -126,50 +125,52 @@
       opacity: 0;
     }
     .custom-controls {
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(10px);
-      padding: 8px 15px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(12px);
+      padding: 14px 20px;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 12px;
-      border-top: 1px solid rgba(255,255,255,0.15);
+      gap: 16px;
+      border-top: 1px solid rgba(255,255,255,0.2);
       transition: opacity 0.3s ease, visibility 0.3s ease;
       opacity: 1;
       visibility: visible;
+      min-height: 70px;
     }
     .custom-controls.hide-controls {
       opacity: 0;
       visibility: hidden;
     }
     .player-card:fullscreen .custom-controls {
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(10px);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(12px);
     }
     .ctrl-btn {
       background: transparent;
       border: none;
       color: #f0f0f0;
-      width: 36px;
-      height: 36px;
+      width: 44px;
+      height: 44px;
       border-radius: 40px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: all 0.2s;
+      font-size: 1.3rem;
     }
     .ctrl-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
     .ctrl-btn:active { transform: scale(0.96); }
     .progress-bar-bg {
       flex: 1;
-      height: 5px;
+      height: 8px;
       background: rgba(255,255,255,0.3);
       border-radius: 8px;
       cursor: pointer;
       transition: height 0.1s;
     }
-    .progress-bar-bg:hover { height: 7px; background: rgba(255,255,255,0.5); }
+    .progress-bar-bg:hover { height: 10px; background: rgba(255,255,255,0.5); }
     .progress-fill {
       width: 0%;
       height: 100%;
@@ -179,16 +180,17 @@
     }
     .time-display {
       font-family: monospace;
-      font-size: 0.85rem;
-      background: rgba(0,0,0,0.5);
-      padding: 4px 8px;
-      border-radius: 20px;
+      font-size: 1rem;
+      background: rgba(0,0,0,0.6);
+      padding: 6px 12px;
+      border-radius: 24px;
       letter-spacing: 0.5px;
-      color: #ddd;
+      color: #fff;
+      font-weight: 500;
     }
     .volume-slider {
-      width: 80px;
-      height: 4px;
+      width: 90px;
+      height: 5px;
       -webkit-appearance: none;
       background: rgba(255,255,255,0.3);
       border-radius: 5px;
@@ -197,20 +199,20 @@
     }
     .volume-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 12px;
-      height: 12px;
+      width: 16px;
+      height: 16px;
       background: #ff6b81;
       border-radius: 50%;
       cursor: pointer;
       box-shadow: 0 0 2px white;
     }
     .speed-dropdown, .quality-dropdown {
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.8);
       border: 1px solid rgba(255,255,255,0.3);
       color: white;
-      padding: 6px 12px;
-      border-radius: 28px;
-      font-size: 0.85rem;
+      padding: 8px 14px;
+      border-radius: 32px;
+      font-size: 0.9rem;
       font-weight: 500;
       cursor: pointer;
       outline: none;
@@ -230,11 +232,12 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 640px) {
-      .ctrl-btn { width: 44px; height: 44px; font-size: 1.2rem; }
+      .ctrl-btn { width: 48px; height: 48px; font-size: 1.4rem; }
       .progress-bar-bg { height: 6px; }
-      .volume-slider { width: 60px; }
-      .speed-dropdown, .quality-dropdown { padding: 6px 8px; font-size: 0.75rem; }
-      .time-display { font-size: 0.7rem; padding: 4px 6px; }
+      .volume-slider { width: 70px; }
+      .speed-dropdown, .quality-dropdown { padding: 6px 10px; font-size: 0.8rem; }
+      .time-display { font-size: 0.8rem; padding: 4px 8px; }
+      .custom-controls { padding: 12px 12px; gap: 12px; min-height: 60px; }
     }
     .manage-form-container {
       border: none;
@@ -376,11 +379,11 @@
   </div>
 </div>
 
-<!-- Advanced Video Player Modal (fixed) -->
+<!-- Advanced Video Player Modal - with fresh iframe recreation -->
 <div id="videoPlayerModal" class="hidden fixed inset-0 video-modal-overlay flex items-center justify-center p-2 md:p-4 z-[300]">
   <div class="player-card w-full max-w-5xl">
-    <div class="video-stage relative">
-      <iframe id="youtubeIframe" class="absolute inset-0 w-full h-full border-0 pointer-events-none" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>
+    <div class="video-stage relative" id="videoStageContainer">
+      <!-- iframe will be dynamically created here -->
       <div id="videoOverlay" class="absolute inset-0 z-20 cursor-pointer"></div>
       <div id="centerPlayIcon" class="center-play-icon"><i class="fas fa-play"></i></div>
       <div id="messagePanel" class="absolute inset-0 bg-black/80 backdrop-blur-xl z-40 flex items-center justify-center flex-col gap-4 text-white hidden">
@@ -577,7 +580,7 @@ function selectChapter(chapterId) {
   if (window.innerWidth < 768) toggleSidebar();
 }
 
-// ========== ENHANCED VIDEO PLAYER (FIXED for multiple videos & fullscreen exit) ==========
+// ========== ADVANCED VIDEO PLAYER - FIXED FOR MULTIPLE VIDEOS ==========
 let player = null;
 let playerReady = false;
 let currentVideoId = null;
@@ -587,10 +590,10 @@ let currentVolume = 70;
 let isMuted = false;
 let currentPlaybackRate = 1;
 let controlsHideTimeout = null;
-let isFullscreen = false;
+let isCreatingPlayer = false;
 
 const modal = document.getElementById('videoPlayerModal');
-const iframe = document.getElementById('youtubeIframe');
+const videoStageContainer = document.getElementById('videoStageContainer');
 const overlayVideo = document.getElementById('videoOverlay');
 const playPauseBtn = document.getElementById('playPauseBtn');
 const progressBarBg = document.getElementById('progressBarBg');
@@ -627,11 +630,16 @@ function showControls() {
 function bindControlEvents() {
   const stage = document.querySelector('#videoPlayerModal .video-stage');
   if (stage) {
+    stage.removeEventListener('mousemove', showControls);
+    stage.removeEventListener('click', showControls);
+    stage.removeEventListener('touchstart', showControls);
     stage.addEventListener('mousemove', showControls);
     stage.addEventListener('click', showControls);
     stage.addEventListener('touchstart', showControls);
   }
   if (customControls) {
+    customControls.removeEventListener('mouseenter', null);
+    customControls.removeEventListener('mouseleave', null);
     customControls.addEventListener('mouseenter', () => {
       if (controlsHideTimeout) clearTimeout(controlsHideTimeout);
       customControls.classList.remove('hide-controls');
@@ -640,6 +648,7 @@ function bindControlEvents() {
   }
 }
 
+// Completely destroy and remove the iframe
 function destroyPlayer() {
   if (progressInterval) {
     clearInterval(progressInterval);
@@ -649,11 +658,26 @@ function destroyPlayer() {
     try {
       player.pauseVideo();
       player.destroy();
-    } catch(e) {}
+    } catch(e) { console.warn('Player destroy error:', e); }
     player = null;
   }
   playerReady = false;
-  iframe.src = 'about:blank';
+  // Remove existing iframe
+  const existingIframe = document.getElementById('youtubeIframe');
+  if (existingIframe) {
+    existingIframe.remove();
+  }
+  isCreatingPlayer = false;
+}
+
+// Create a fresh iframe element
+function createFreshIframe() {
+  const iframe = document.createElement('iframe');
+  iframe.id = 'youtubeIframe';
+  iframe.className = 'absolute inset-0 w-full h-full border-0 pointer-events-none';
+  iframe.allow = 'autoplay; fullscreen; encrypted-media';
+  iframe.allowFullscreen = true;
+  return iframe;
 }
 
 function loadYouTubeAPI() {
@@ -668,7 +692,17 @@ function loadYouTubeAPI() {
 }
 
 function createPlayer(videoId) {
-  destroyPlayer(); // ensure previous player is gone
+  if (isCreatingPlayer) {
+    console.log('Already creating player, skipping');
+    return;
+  }
+  isCreatingPlayer = true;
+  destroyPlayer(); // clean up old player and iframe
+  
+  // Create and append new iframe
+  const newIframe = createFreshIframe();
+  videoStageContainer.insertBefore(newIframe, videoStageContainer.firstChild);
+  
   const params = {
     controls: 0,
     disablekb: 1,
@@ -681,7 +715,8 @@ function createPlayer(videoId) {
     enablejsapi: 1,
     origin: window.location.origin
   };
-  iframe.src = `https://www.youtube.com/embed/${videoId}?${new URLSearchParams(params).toString()}`;
+  newIframe.src = `https://www.youtube.com/embed/${videoId}?${new URLSearchParams(params).toString()}`;
+  
   player = new YT.Player('youtubeIframe', {
     events: {
       onReady: onPlayerReady,
@@ -693,6 +728,7 @@ function createPlayer(videoId) {
 
 function onPlayerReady(e) {
   playerReady = true;
+  isCreatingPlayer = false;
   messagePanel.classList.add('hidden');
   player.setVolume(currentVolume);
   volumeSlider.value = currentVolume;
@@ -730,6 +766,7 @@ function onPlayerError(error) {
   errorTextSpan.innerText = '⚠️ Failed to load video. Invalid ID or restricted content.';
   messagePanel.classList.remove('hidden');
   playerReady = false;
+  isCreatingPlayer = false;
 }
 
 function updateTimeDisplay() {
@@ -850,15 +887,16 @@ function toggleFullscreen() {
 }
 
 function closeVideoModal() {
-  // Exit fullscreen if active
   if (document.fullscreenElement) {
     document.exitFullscreen();
   }
   destroyPlayer();
   modal.classList.add('hidden');
   if (controlsHideTimeout) clearTimeout(controlsHideTimeout);
-  // Reset any stuck pointer events or body styles
   document.body.style.overflow = '';
+  // Remove any leftover iframe from the container
+  const leftoverIframe = document.getElementById('youtubeIframe');
+  if (leftoverIframe) leftoverIframe.remove();
 }
 
 function handleVideoKeys(e) {
@@ -899,7 +937,7 @@ function handleVideoKeys(e) {
   }
 }
 
-// Event listeners for player controls
+// Event listeners
 playPauseBtn.addEventListener('click', () => {
   if (player && playerReady) {
     (player.getPlayerState() === YT.PlayerState.PLAYING) ? player.pauseVideo() : player.playVideo();
@@ -920,14 +958,10 @@ overlayVideo.addEventListener('click', () => {
 overlayVideo.addEventListener('dblclick', toggleFullscreen);
 closeModalBtn.addEventListener('click', closeVideoModal);
 document.addEventListener('keydown', handleVideoKeys);
-
-// Fullscreen change event to restore page responsiveness
 window.addEventListener('fullscreenchange', () => {
   fullscreenBtn.innerHTML = document.fullscreenElement ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>';
   if (!document.fullscreenElement) {
-    // Ensure body scroll is restored and no leftover styles
     document.body.style.overflow = '';
-    // Force a reflow to fix any stuck layout
     document.body.offsetHeight;
   }
 });
@@ -937,32 +971,21 @@ function playVideo(videoId) {
     showToast("No YouTube video ID added yet.", "error");
     return;
   }
-  // If modal is already open, close it first (clean slate)
-  if (!modal.classList.contains('hidden')) {
-    closeVideoModal();
-    // Small delay to allow destroy to complete
-    setTimeout(() => {
-      currentVideoId = videoId;
-      modal.classList.remove('hidden');
-      messagePanel.classList.remove('hidden');
-      errorTextSpan.innerText = "Loading video...";
-      if (window.YT && window.YT.Player) {
-        createPlayer(videoId);
-      } else {
-        loadYouTubeAPI();
-      }
-    }, 100);
-  } else {
+  // Always close existing modal completely and recreate everything
+  closeVideoModal();
+  // Small delay to ensure DOM cleanup
+  setTimeout(() => {
     currentVideoId = videoId;
     modal.classList.remove('hidden');
     messagePanel.classList.remove('hidden');
     errorTextSpan.innerText = "Loading video...";
+    centerIconDiv.style.opacity = '0';
     if (window.YT && window.YT.Player) {
       createPlayer(videoId);
     } else {
       loadYouTubeAPI();
     }
-  }
+  }, 150);
 }
 
 // ========== MANAGE MODAL FUNCTIONS (unchanged) ==========
@@ -1079,4 +1102,4 @@ async function executeManageAction() {
 window.onload = async () => { await checkAuth(); await loadData(); };
 </script>
 </body>
-</html>
+  </html>
