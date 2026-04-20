@@ -1,485 +1,381 @@
+// server.js - Production Ready for Render
+require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
-require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_change_in_production';
+const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// Trust proxy (needed for Render)
+app.set('trust proxy', 1);
+
+// CORS – allow same-origin and the Render frontend
+const allowedOrigins = [process.env.BASE_URL, 'http://localhost:3000'].filter(Boolean);
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));;
+app.use(express.static(path.join(__dirname, 'public'))); // serve HTML from 'public'
+app.use(cookieParser());
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/learning_platform', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-})
-.then(() => console.log('MongoDB connected'))
-.catch(err => console.error('MongoDB connection error:', err));
+// Rate limiting
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
+app.use('/api/', limiter);
 
-// User Schema
-const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now }
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ MongoDB Connected'))
+  .catch(err => console.error('❌ MongoDB Error:', err));
+
+// Models (all moved to /models folder)
+const User = require('./models/User');
+const Lecture = require('./models/Lecture');
+const Chapter = require('./models/Chapter');
+const Progress = require('./models/Progress');
+const LiveSchedule = require('./models/LiveSchedule');
+const Subject = require('./models/Subject');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
+
+// Email transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
 });
 
-// Subject Schema
-const subjectSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    description: { type: String, default: '' },
-    icon: { type: String, default: '📚' },
-    order: { type: Number, default: 0 },
-    createdAt: { type: Date, default: Date.now }
-});
+const otpStore = new Map();
 
-// Lecture Schema
-const lectureSchema = new mongoose.Schema({
-    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
-    title: { type: String, required: true },
-    content: { type: String, default: '' },
-    videoUrl: { type: String, default: '' },
-    order: { type: Number, default: 0 },
-    createdAt: { type: Date, default: Date.now }
-});
-
-// Progress Schema
-const progressSchema = new mongoose.Schema({
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    lecture: { type: mongoose.Schema.Types.ObjectId, ref: 'Lecture', required: true },
-    completed: { type: Boolean, default: false },
-    lastAccessed: { type: Date, default: Date.now }
-});
-
-// Models
-const User = mongoose.model('User', userSchema);
-const Subject = mongoose.model('Subject', subjectSchema);
-const Lecture = mongoose.model('Lecture', lectureSchema);
-const Progress = mongoose.model('Progress', progressSchema);
-
-// Authentication Middleware
-const authenticate = async (req, res, next) => {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-        return res.status(401).json({ success: false, msg: 'No token, authorization denied' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await User.findById(decoded.userId).select('-password');
-        if (!user) {
-            return res.status(401).json({ success: false, msg: 'User not found' });
-        }
-        req.user = user;
-        next();
-    } catch (err) {
-        res.status(401).json({ success: false, msg: 'Token is not valid' });
-    }
+// ========== MIDDLEWARE ==========
+const authenticate = (req, res, next) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ success: false, msg: "Please login" });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (err) {
+    res.status(401).json({ success: false, msg: "Session expired" });
+  }
 };
 
-// ========== AUTH ROUTES ==========
+const isAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ success: false, msg: "Admin access only" });
+  next();
+};
 
-// Register
-app.post('/api/auth/register', async (req, res) => {
-    try {
-        const { name, email, password } = req.body;
+// ========== SEEDING (only if env vars provided) ==========
+const seedAdmin = async () => {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    console.log('⏩ Skipping admin seed (ADMIN_EMAIL/PASSWORD not set)');
+    return;
+  }
+  const existing = await User.findOne({ email: adminEmail });
+  if (!existing) {
+    await User.create({ name: "Admin", email: adminEmail, password: adminPassword, role: "admin" });
+    console.log(`✅ Admin created: ${adminEmail}`);
+  } else {
+    console.log(`✅ Admin already exists`);
+  }
+};
 
-        // Check if user exists
-        let user = await User.findOne({ email });
-        if (user) {
-            return res.status(400).json({ success: false, msg: 'User already exists' });
-        }
+const seedSubjects = async () => {
+  const defaultSubjects = [
+    { name: "Quantitative Aptitude", icon: "📊", color: "blue", order: 1 },
+    { name: "Reasoning Ability", icon: "🧠", color: "purple", order: 2 },
+    { name: "English Language", icon: "📖", color: "pink", order: 3 },
+    { name: "Banking Awareness", icon: "🏦", color: "emerald", order: 4 },
+    { name: "Current Affairs", icon: "📰", color: "orange", order: 5 }
+  ];
+  for (let sub of defaultSubjects) {
+    const exists = await Subject.findOne({ name: sub.name });
+    if (!exists) await Subject.create(sub);
+  }
+  console.log("✅ Default subjects seeded");
+};
 
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+mongoose.connection.once('open', async () => {
+  await seedAdmin();
+  await seedSubjects();
+});
 
-        // Create user
-        user = new User({
-            name,
-            email,
-            password: hashedPassword
-        });
+// ========== API ROUTES ==========
 
-        await user.save();
+// Get today's live classes
+app.get('/api/live/today', authenticate, async (req, res) => {
+  try {
+    const { date } = req.query;
+    const today = date || new Date().toISOString().split('T')[0];
+    const lives = await LiveSchedule.find({ date: today });
+    res.json(lives);
+  } catch (err) {
+    res.status(500).json([]);
+  }
+});
 
-        // Create token
-        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '7d' });
+// Get single lecture (for edit modal)
+app.get('/api/lectures/:id', authenticate, async (req, res) => {
+  try {
+    const lecture = await Lecture.findById(req.params.id);
+    if (!lecture) return res.status(404).json({ success: false, msg: "Not found" });
+    res.json(lecture);
+  } catch (err) {
+    res.status(500).json({ success: false, msg: "Failed to fetch lecture" });
+  }
+});
 
-        res.json({
-            success: true,
-            token,
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email
-            }
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+// Send OTP
+app.post('/api/send-otp', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.json({ success: false, msg: "Email required" });
+  if (await User.findOne({ email })) return res.json({ success: false, msg: "Email already registered" });
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore.set(email, { otp, expires: Date.now() + 10 * 60 * 1000 });
+
+  try {
+    await transporter.sendMail({
+      from: `"My PW" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Your Signup OTP - My PW",
+      html: `<div style="font-family: Arial; max-width:500px; margin:auto; padding:20px; background:#f8fafc; border-radius:12px;">
+              <h2 style="color:#1e40af; text-align:center;">My PW</h2>
+              <div style="background:white; padding:20px; border-radius:10px; text-align:center;">
+                <h1 style="font-size:42px; letter-spacing:8px; color:#1e40af;">${otp}</h1>
+              </div>
+              <p style="text-align:center;">Valid for 10 minutes.</p>
+             </div>`
+    });
+    res.json({ success: true, msg: "OTP sent" });
+  } catch (err) {
+    console.error("Email error:", err);
+    res.json({ success: false, msg: "Failed to send OTP. Check email configuration." });
+  }
+});
+
+// Signup
+app.post('/api/signup', async (req, res) => {
+  const { name, email, password, otp } = req.body;
+  const stored = otpStore.get(email);
+  if (!stored || stored.otp !== otp || stored.expires < Date.now()) {
+    return res.json({ success: false, msg: "Invalid or expired OTP" });
+  }
+  try {
+    await User.create({ name, email, password, role: "student" });
+    otpStore.delete(email);
+    res.json({ success: true, msg: "Account created! You can now login." });
+  } catch (err) {
+    res.status(500).json({ success: false, msg: "Registration failed" });
+  }
 });
 
 // Login
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        // Check if user exists
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(400).json({ success: false, msg: 'Invalid credentials' });
-        }
-
-        // Check password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ success: false, msg: 'Invalid credentials' });
-        }
-
-        // Create token
-        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '7d' });
-
-        res.json({
-            success: true,
-            token,
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email
-            }
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user || !(await user.comparePassword(password))) {
+      return res.json({ success: false, msg: "Invalid email or password" });
     }
+    const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('token', token, { httpOnly: true, maxAge: 7*24*60*60*1000, sameSite: 'lax' });
+    res.json({ success: true, msg: "Login successful", user: { name: user.name, role: user.role } });
+  } catch (err) {
+    res.status(500).json({ success: false, msg: "Server error" });
+  }
+});
+
+// Forgot password
+app.post('/api/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.json({ success: false, msg: "No account found" });
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000;
+    await user.save();
+
+    const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    const resetLink = `${baseUrl}/reset-password.html?token=${resetToken}`;
+
+    await transporter.sendMail({
+      from: `"My PW" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Reset Your Password",
+      html: `<h2>Reset Password</h2>
+             <p>Click <a href="${resetLink}">here</a> to reset your password.</p>
+             <p>This link expires in 1 hour.</p>`
+    });
+    res.json({ success: true, msg: "Reset link sent to your email." });
+  } catch (err) {
+    res.status(500).json({ success: false, msg: "Failed to send reset email" });
+  }
+});
+
+// Reset password
+app.post('/api/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+  try {
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+    if (!user) return res.json({ success: false, msg: "Invalid or expired reset link" });
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+    res.json({ success: true, msg: "Password reset successful!" });
+  } catch (err) {
+    res.status(500).json({ success: false, msg: "Failed to reset password" });
+  }
+});
+
+// Logout
+app.post('/api/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ success: true });
 });
 
 // Get current user
-app.get('/api/auth/me', authenticate, (req, res) => {
-    res.json({
-        success: true,
-        user: {
-            id: req.user._id,
-            name: req.user.name,
-            email: req.user.email
-        }
-    });
+app.get('/api/me', authenticate, (req, res) => {
+  res.json({ success: true, user: { name: req.user.name, role: req.user.role } });
 });
 
-// ========== SUBJECT ROUTES ==========
-
-// Get all subjects
-app.get('/api/subjects', async (req, res) => {
-    try {
-        const subjects = await Subject.find().sort({ order: 1 });
-        res.json(subjects);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+// Chapters
+app.get('/api/chapters', async (req, res) => {
+  try {
+    const { subjectId } = req.query;
+    const filter = subjectId ? { subjectId } : {};
+    const chapters = await Chapter.find(filter).sort({ order: 1 });
+    res.json(chapters);
+  } catch (err) {
+    res.status(500).json([]);
+  }
 });
 
-// Get all subjects with aggregated progress for the logged-in user
-app.get('/api/subjects/progress', authenticate, async (req, res) => {
-    try {
-        const userId = req.user.id;
+// Lectures with progress
+app.get('/api/lectures', authenticate, async (req, res) => {
+  try {
+    const { chapterId, subjectId } = req.query;
+    let filter = {};
+    if (chapterId) filter.chapterId = chapterId;
+    else if (subjectId) filter.subjectId = subjectId;
 
-        // 1. Fetch all subjects, sorted by order
-        const subjects = await Subject.find().sort({ order: 1 }).lean();
+    const lectures = await Lecture.find(filter);
+    const progress = await Progress.find({ user: req.user.id });
+    const completedMap = new Map(progress.map(p => [p.lecture.toString(), true]));
 
-        // 2. For each subject, count total lectures and completed lectures
-        const subjectsWithProgress = await Promise.all(
-            subjects.map(async (subject) => {
-                // Count total lectures belonging to this subject
-                const totalLectures = await Lecture.countDocuments({ subjectId: subject._id });
-
-                // Count completed lectures for this user & subject
-                const completedLectures = await Progress.countDocuments({
-                    user: userId,
-                    completed: true,
-                    lecture: { $in: await Lecture.find({ subjectId: subject._id }).distinct('_id') }
-                });
-
-                const progressPercent = totalLectures > 0
-                    ? Math.round((completedLectures / totalLectures) * 100)
-                    : 0;
-
-                return {
-                    ...subject,
-                    totalLectures,
-                    completedLectures,
-                    progressPercent
-                };
-            })
-        );
-
-        res.json(subjectsWithProgress);
-    } catch (err) {
-        console.error('Error fetching subjects with progress:', err);
-        res.status(500).json({ success: false, msg: 'Failed to load subjects' });
-    }
+    const result = lectures.map(lec => ({
+      ...lec.toObject(),
+      completed: !!completedMap.get(lec._id.toString())
+    }));
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, msg: "Failed to load lectures" });
+  }
 });
 
-// Get single subject
-app.get('/api/subjects/:id', async (req, res) => {
-    try {
-        const subject = await Subject.findById(req.params.id);
-        if (!subject) {
-            return res.status(404).json({ success: false, msg: 'Subject not found' });
-        }
-        res.json(subject);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+// Mark lecture complete
+app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
+  try {
+    await Progress.findOneAndUpdate(
+      { user: req.user.id, lecture: req.params.id },
+      { completed: true, completedAt: new Date() },
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
 });
 
-// Create subject (admin only - you might want to add admin check)
-app.post('/api/subjects', authenticate, async (req, res) => {
-    try {
-        const { name, description, icon, order } = req.body;
-        
-        const subject = new Subject({
-            name,
-            description,
-            icon,
-            order
-        });
-
-        await subject.save();
-        res.json({ success: true, subject });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+// Live schedule (admin only)
+app.post('/api/live', authenticate, isAdmin, async (req, res) => {
+  try {
+    const live = await LiveSchedule.create(req.body);
+    res.json({ success: true, live });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
 });
 
-// ========== LECTURE ROUTES ==========
-
-// Get lectures for a subject
-app.get('/api/subjects/:subjectId/lectures', async (req, res) => {
-    try {
-        const lectures = await Lecture.find({ subjectId: req.params.subjectId })
-            .sort({ order: 1 });
-        res.json(lectures);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+app.delete('/api/live/:id', authenticate, isAdmin, async (req, res) => {
+  try {
+    await LiveSchedule.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
 });
 
-// Get lectures with progress for a subject (authenticated)
-app.get('/api/subjects/:subjectId/lectures/progress', authenticate, async (req, res) => {
-    try {
-        const lectures = await Lecture.find({ subjectId: req.params.subjectId })
-            .sort({ order: 1 })
-            .lean();
-
-        // Get progress for each lecture
-        const lecturesWithProgress = await Promise.all(
-            lectures.map(async (lecture) => {
-                const progress = await Progress.findOne({
-                    user: req.user._id,
-                    lecture: lecture._id
-                });
-                
-                return {
-                    ...lecture,
-                    completed: progress?.completed || false
-                };
-            })
-        );
-
-        res.json(lecturesWithProgress);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+// Subject CRUD
+app.get('/api/subjects', authenticate, async (req, res) => {
+  try {
+    const subjects = await Subject.find().sort({ order: 1 });
+    res.json(subjects);
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
 });
 
-// Get single lecture
-app.get('/api/lectures/:id', async (req, res) => {
-    try {
-        const lecture = await Lecture.findById(req.params.id);
-        if (!lecture) {
-            return res.status(404).json({ success: false, msg: 'Lecture not found' });
-        }
-        res.json(lecture);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+app.post('/api/subjects', authenticate, isAdmin, async (req, res) => {
+  try {
+    const subject = await Subject.create(req.body);
+    res.json({ success: true, subject });
+  } catch (err) {
+    res.status(500).json({ success: false, msg: err.message });
+  }
 });
 
-// Create lecture
-app.post('/api/lectures', authenticate, async (req, res) => {
-    try {
-        const { subjectId, title, content, videoUrl, order } = req.body;
-        
-        const lecture = new Lecture({
-            subjectId,
-            title,
-            content,
-            videoUrl,
-            order
-        });
-
-        await lecture.save();
-        res.json({ success: true, lecture });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+app.delete('/api/subjects/:id', authenticate, isAdmin, async (req, res) => {
+  try {
+    await Subject.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
 });
 
-// ========== PROGRESS ROUTES ==========
-
-// Mark lecture as completed
-app.post('/api/progress/:lectureId/complete', authenticate, async (req, res) => {
-    try {
-        const lectureId = req.params.lectureId;
-        
-        // Verify lecture exists
-        const lecture = await Lecture.findById(lectureId);
-        if (!lecture) {
-            return res.status(404).json({ success: false, msg: 'Lecture not found' });
-        }
-
-        // Update or create progress record
-        let progress = await Progress.findOne({
-            user: req.user._id,
-            lecture: lectureId
-        });
-
-        if (progress) {
-            progress.completed = true;
-            progress.lastAccessed = Date.now();
-        } else {
-            progress = new Progress({
-                user: req.user._id,
-                lecture: lectureId,
-                completed: true
-            });
-        }
-
-        await progress.save();
-        res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
+// Admin chapter & lecture management
+app.post('/api/chapters', authenticate, isAdmin, async (req, res) => {
+  try { res.json(await Chapter.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
+});
+app.post('/api/lectures', authenticate, isAdmin, async (req, res) => {
+  try { res.json(await Lecture.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
+});
+app.delete('/api/chapters/:id', authenticate, isAdmin, async (req, res) => {
+  await Chapter.findByIdAndDelete(req.params.id);
+  res.json({ success: true });
+});
+app.delete('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
+  await Lecture.findByIdAndDelete(req.params.id);
+  res.json({ success: true });
+});
+app.put('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
+  const lecture = await Lecture.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  res.json(lecture || { success: false });
 });
 
-// Toggle lecture completion
-app.post('/api/progress/:lectureId/toggle', authenticate, async (req, res) => {
-    try {
-        const lectureId = req.params.lectureId;
-        
-        // Verify lecture exists
-        const lecture = await Lecture.findById(lectureId);
-        if (!lecture) {
-            return res.status(404).json({ success: false, msg: 'Lecture not found' });
-        }
-
-        // Find existing progress
-        let progress = await Progress.findOne({
-            user: req.user._id,
-            lecture: lectureId
-        });
-
-        if (progress) {
-            progress.completed = !progress.completed;
-            progress.lastAccessed = Date.now();
-        } else {
-            progress = new Progress({
-                user: req.user._id,
-                lecture: lectureId,
-                completed: true
-            });
-        }
-
-        await progress.save();
-        res.json({ success: true, completed: progress.completed });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
-});
-
-// Get overall progress for dashboard
-app.get('/api/progress/overall', authenticate, async (req, res) => {
-    try {
-        const totalLectures = await Lecture.countDocuments();
-        const completedLectures = await Progress.countDocuments({
-            user: req.user._id,
-            completed: true
-        });
-
-        const subjects = await Subject.find().sort({ order: 1 }).lean();
-        const subjectProgress = await Promise.all(
-            subjects.map(async (subject) => {
-                const total = await Lecture.countDocuments({ subjectId: subject._id });
-                const completed = await Progress.countDocuments({
-                    user: req.user._id,
-                    completed: true,
-                    lecture: { $in: await Lecture.find({ subjectId: subject._id }).distinct('_id') }
-                });
-
-                return {
-                    subject: subject.name,
-                    total,
-                    completed,
-                    percentage: total > 0 ? Math.round((completed / total) * 100) : 0
-                };
-            })
-        );
-
-        res.json({
-            totalLectures,
-            completedLectures,
-            overallPercentage: totalLectures > 0 
-                ? Math.round((completedLectures / totalLectures) * 100) 
-                : 0,
-            subjectProgress
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, msg: 'Server error' });
-    }
-});
-
-// Serve HTML pages
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-app.get('/register', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'register.html'));
-});
-
-app.get('/subjects', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'subjects.html'));
-});
-
-app.get('/lecture', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'lecture.html'));
+// Catch-all: serve index.html for any unknown route (optional, but keeps SPA behaviour)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
