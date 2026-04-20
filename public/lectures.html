@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
   <title>Lectures - Project02</title>
+  <link rel="manifest" href="/manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <style>
-    /* Your original styles */
+    /* Your original styles (same as before) */
     body { font-family: system-ui, -apple-system, sans-serif; }
     .chapter-item:hover { background-color: #f8fafc; }
     .active-chapter {
@@ -31,33 +32,21 @@
         width: 280px;
         box-shadow: 4px 0 15px rgba(0,0,0,0.15);
       }
-      .sidebar.open {
-        transform: translateX(280px);
-      }
+      .sidebar.open { transform: translateX(280px); }
     }
-    .modal-content {
-      max-height: 85vh;
-      overflow-y: auto;
-    }
-
-    /* Manage buttons: NO blue borders, neutral style */
+    .modal-content { max-height: 85vh; overflow-y: auto; }
     .manage-btn {
       transition: all 0.2s ease;
       border: 1px solid #d1d5db;
       background: white;
       color: #374151;
     }
-    .manage-btn:hover {
-      background-color: #f3f4f6;
-      transform: translateY(-1px);
-    }
+    .manage-btn:hover { background-color: #f3f4f6; transform: translateY(-1px); }
     .manage-btn-active {
       background-color: #e5e7eb;
       font-weight: 600;
       border: 1px solid #9ca3af;
     }
-
-    /* Toast notifications */
     #toast-container {
       position: fixed;
       bottom: 20px;
@@ -88,8 +77,7 @@
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
-
-    /* ========== ADVANCED VIDEO PLAYER MODAL STYLES ========== */
+    /* ========== ENHANCED VIDEO PLAYER STYLES ========== */
     .video-modal-overlay {
       background: rgba(0, 0, 0, 0.85);
       backdrop-filter: blur(8px);
@@ -138,8 +126,6 @@
       z-index: 25;
     }
     .video-stage:hover .center-play-icon { opacity: 0.9; }
-
-    /* Custom controls bar: transparent, glassmorphic, auto-hide */
     .custom-controls {
       background: rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(10px);
@@ -157,12 +143,10 @@
       opacity: 0;
       visibility: hidden;
     }
-    /* In fullscreen, keep the same behavior */
     .player-card:fullscreen .custom-controls {
       background: rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(10px);
     }
-
     .ctrl-btn {
       background: transparent;
       border: none;
@@ -221,7 +205,7 @@
       cursor: pointer;
       box-shadow: 0 0 2px white;
     }
-    .speed-dropdown {
+    .speed-dropdown, .quality-dropdown {
       background: rgba(0,0,0,0.7);
       border: 1px solid rgba(255,255,255,0.3);
       color: white;
@@ -233,7 +217,7 @@
       outline: none;
       backdrop-filter: blur(4px);
     }
-    .speed-dropdown option {
+    .speed-dropdown option, .quality-dropdown option {
       background: #1f2937;
       color: white;
     }
@@ -246,16 +230,13 @@
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
     @media (max-width: 640px) {
       .ctrl-btn { width: 44px; height: 44px; font-size: 1.2rem; }
       .progress-bar-bg { height: 6px; }
       .volume-slider { width: 60px; }
-      .speed-dropdown { padding: 6px 8px; font-size: 0.75rem; }
+      .speed-dropdown, .quality-dropdown { padding: 6px 8px; font-size: 0.75rem; }
       .time-display { font-size: 0.7rem; padding: 4px 6px; }
     }
-
-    /* Manage form containers: NO blue border, no highlight */
     .manage-form-container {
       border: none;
       padding: 1rem;
@@ -264,15 +245,13 @@
       border-radius: 0.75rem;
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .manage-form-container input,
-    .manage-form-container select {
+    .manage-form-container input, .manage-form-container select {
       border: 1px solid #e2e8f0;
       outline: none;
       box-shadow: none;
       transition: none;
     }
-    .manage-form-container input:focus,
-    .manage-form-container select:focus {
+    .manage-form-container input:focus, .manage-form-container select:focus {
       outline: none;
       box-shadow: none;
       border-color: #e2e8f0;
@@ -288,9 +267,7 @@
   <!-- Sidebar -->
   <div class="sidebar w-72 bg-white border-r border-gray-200 overflow-y-auto" id="sidebar">
     <div class="p-6">
-      <a href="/subjects.html" class="flex items-center gap-2 text-xl font-semibold text-gray-800 hover:text-blue-600 mb-8">
-        ← Subjects
-      </a>
+      <a href="/subjects.html" class="flex items-center gap-2 text-xl font-semibold text-gray-800 hover:text-blue-600 mb-8">← Subjects</a>
       <div class="px-6 py-4 text-xs font-medium text-gray-500">CHAPTERS</div>
       <div class="px-3 space-y-0.5" id="chapters-list"></div>
     </div>
@@ -300,27 +277,19 @@
   <div class="flex-1 flex flex-col overflow-hidden">
     <div class="bg-white border-b px-4 md:px-8 py-5 flex justify-between items-center">
       <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-3xl text-gray-700">
-          <i class="fa-solid fa-bars"></i>
-        </button>
+        <button onclick="toggleSidebar()" class="md:hidden text-3xl text-gray-700"><i class="fa-solid fa-bars"></i></button>
         <h1 class="text-2xl font-semibold" id="subject-title">All Classes</h1>
       </div>
       <div class="flex items-center gap-4">
-        <button id="manage-btn" onclick="showManageModal()"
-                class="hidden flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-medium transition-colors">
-          <i class="fa-solid fa-plus"></i> Manage
-        </button>
-        <button onclick="logout()"
-                class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-2xl text-sm font-medium">
-          <i class="fa-solid fa-right-from-bracket"></i> Logout
-        </button>
+        <button id="installBtn" class="hidden flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-2xl text-sm font-medium"><i class="fa-solid fa-download"></i> Install as App</button>
+        <button id="manage-btn" onclick="showManageModal()" class="hidden flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-medium"><i class="fa-solid fa-plus"></i> Manage</button>
+        <button onclick="logout()" class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-2xl text-sm font-medium"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
       </div>
     </div>
 
     <div class="bg-white border-b px-4 md:px-8 py-4 flex gap-4 items-center">
       <div class="relative flex-1">
-        <input type="text" id="search-input" placeholder="Search lectures by title..."
-               onkeyup="applyFilters()" class="w-full border border-gray-300 rounded-2xl px-5 py-3 pl-12 focus:outline-none focus:border-blue-500">
+        <input type="text" id="search-input" placeholder="Search lectures by title..." onkeyup="applyFilters()" class="w-full border border-gray-300 rounded-2xl px-5 py-3 pl-12 focus:outline-none focus:border-blue-500">
         <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
       </div>
       <select id="filter-select" onchange="applyFilters()" class="border border-gray-300 rounded-2xl px-5 py-3 focus:outline-none">
@@ -337,13 +306,13 @@
 <!-- Toast Container -->
 <div id="toast-container"></div>
 
-<!-- Notes & More Pop-up -->
+<!-- Notes Modal -->
 <div id="notes-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[200]">
   <div class="bg-white rounded-3xl p-8 w-full max-w-sm mx-4">
     <h3 class="text-xl font-semibold mb-6 text-center">What do you want to open?</h3>
     <div class="space-y-3">
-      <button onclick="openPdf()" class="w-full py-4 border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-2xl font-medium flex items-center justify-center gap-3 transition-all">📄 Class PDF (Notes)</button>
-      <button onclick="openDpp()" class="w-full py-4 border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-2xl font-medium flex items-center justify-center gap-3 transition-all">📝 DPP</button>
+      <button onclick="openPdf()" class="w-full py-4 border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-2xl font-medium flex items-center justify-center gap-3">📄 Class PDF (Notes)</button>
+      <button onclick="openDpp()" class="w-full py-4 border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-2xl font-medium flex items-center justify-center gap-3">📝 DPP</button>
     </div>
     <button onclick="hideNotesModal()" class="w-full mt-6 py-3 text-gray-500 hover:text-gray-700 font-medium">Cancel</button>
   </div>
@@ -360,11 +329,7 @@
       <button onclick="setManageMode(4)" id="btn4" class="manage-btn py-4 rounded-2xl font-medium">Delete Lecture</button>
       <button onclick="setManageMode(5)" id="btn5" class="manage-btn py-4 rounded-2xl font-medium col-span-2">Update Lecture (Add Notes/DPP)</button>
     </div>
-
-    <!-- Form 1: Add Chapter -->
     <div id="form1" class="manage-form-container"><input id="chapter-title" type="text" placeholder="New Chapter Title" class="w-full border border-gray-300 rounded-2xl px-5 py-4 text-lg"></div>
-
-    <!-- Form 2: Add Lecture -->
     <div id="form2" class="manage-form-container hidden space-y-4">
       <select id="lecture-chapter-select" class="w-full border border-gray-300 rounded-2xl px-5 py-4"></select>
       <input id="lecture-title" type="text" placeholder="Lecture Title" class="w-full border border-gray-300 rounded-2xl px-5 py-4">
@@ -377,17 +342,11 @@
       <input id="lecture-pdf" type="text" placeholder="Class PDF Link (Google Drive)" class="w-full border border-gray-300 rounded-2xl px-5 py-4">
       <input id="lecture-dpp" type="text" placeholder="DPP Link (Google Drive)" class="w-full border border-gray-300 rounded-2xl px-5 py-4">
     </div>
-
-    <!-- Form 3: Delete Chapter -->
     <div id="form3" class="manage-form-container hidden"><select id="delete-chapter-select" class="w-full border border-gray-300 rounded-2xl px-5 py-4"></select></div>
-
-    <!-- Form 4: Delete Lecture -->
     <div id="form4" class="manage-form-container hidden space-y-4">
       <select id="delete-lecture-chapter" onchange="updateDeleteLectureOptions()" class="w-full border border-gray-300 rounded-2xl px-5 py-4"></select>
       <select id="delete-lecture-select" class="w-full border border-gray-300 rounded-2xl px-5 py-4"></select>
     </div>
-
-    <!-- Form 5: Update Lecture -->
     <div id="form5" class="manage-form-container hidden space-y-4">
       <select id="update-lecture-chapter" onchange="populateUpdateLectureSelect()" class="w-full border border-gray-300 rounded-2xl px-5 py-4"></select>
       <select id="update-lecture-select" onchange="loadLectureForUpdate()" class="w-full border border-gray-300 rounded-2xl px-5 py-4"></select>
@@ -397,7 +356,6 @@
       <input id="update-pdf" type="text" placeholder="Class PDF Link (Google Drive)" class="w-full border border-gray-300 rounded-2xl px-5 py-4">
       <input id="update-dpp" type="text" placeholder="DPP Link (Google Drive)" class="w-full border border-gray-300 rounded-2xl px-5 py-4">
     </div>
-
     <div class="flex gap-4 mt-8">
       <button onclick="hideManageModal()" class="flex-1 py-4 border border-gray-300 rounded-2xl font-medium">Cancel</button>
       <button onclick="executeManageAction()" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-semibold">Confirm Action</button>
@@ -419,11 +377,11 @@
   </div>
 </div>
 
-<!-- Advanced Video Player Modal -->
+<!-- Advanced Video Player Modal (with quality selector & PiP) -->
 <div id="videoPlayerModal" class="hidden fixed inset-0 video-modal-overlay flex items-center justify-center p-2 md:p-4 z-[300]">
   <div class="player-card w-full max-w-5xl">
     <div class="video-stage relative">
-      <iframe id="youtubeIframe" class="absolute inset-0 w-full h-full border-0 pointer-events-none" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>
+      <iframe id="youtubeIframe" class="absolute inset-0 w-full h-full border-0 pointer-events-none" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe>
       <div id="videoOverlay" class="absolute inset-0 z-20 cursor-pointer"></div>
       <div id="centerPlayIcon" class="center-play-icon"><i class="fas fa-play"></i></div>
       <div id="messagePanel" class="absolute inset-0 bg-black/80 backdrop-blur-xl z-40 flex items-center justify-center flex-col gap-4 text-white hidden">
@@ -441,14 +399,19 @@
         <button class="ctrl-btn w-8 h-8" id="volumeBtn"><i class="fas fa-volume-up"></i></button>
         <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="70">
       </div>
+      <!-- Speed dropdown -->
       <select id="speedDropdown" class="speed-dropdown">
-        <option value="0.5">0.5x</option>
-        <option value="0.75">0.75x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.25">1.25x</option>
-        <option value="1.5">1.5x</option>
-        <option value="2">2x</option>
+        <option value="0.5">0.5x</option><option value="0.75">0.75x</option><option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x</option>
       </select>
+      <!-- Quality dropdown (YouTube resolutions) -->
+      <select id="qualityDropdown" class="quality-dropdown">
+        <option value="auto">Auto</option>
+        <option value="144p">144p</option><option value="240p">240p</option><option value="360p">360p</option>
+        <option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option>
+      </select>
+      <!-- Picture-in-Picture button -->
+      <button class="ctrl-btn" id="pipBtn"><i class="fas fa-window-restore"></i></button>
       <button class="ctrl-btn" id="fullscreenBtn"><i class="fas fa-expand"></i></button>
       <button class="ctrl-btn ml-auto text-white bg-white/10 rounded-full w-8 h-8" id="closeVideoModal"><i class="fas fa-times"></i></button>
     </div>
@@ -470,7 +433,32 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
-// ========== YOUR ORIGINAL CODE (modified) ==========
+// ========== PWA INSTALL BUTTON ==========
+let deferredPrompt = null;
+const installBtn = document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.classList.remove('hidden');
+});
+installBtn.addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') showToast('App installed successfully!', 'success');
+    else showToast('Installation cancelled', 'info');
+    deferredPrompt = null;
+    installBtn.classList.add('hidden');
+  } else showToast('Your browser does not support automatic installation.', 'info');
+});
+window.addEventListener('appinstalled', () => { installBtn.classList.add('hidden'); deferredPrompt = null; });
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed', err));
+  });
+}
+
+// ========== YOUR ORIGINAL APP LOGIC (unchanged except for player enhancements) ==========
 const urlParams = new URLSearchParams(window.location.search);
 const subjectId = urlParams.get('subjectId');
 const subjectName = urlParams.get('subjectName') || 'All Classes';
@@ -492,27 +480,19 @@ async function checkAuth() {
       document.getElementById('manage-btn').classList.remove('hidden');
       isAdmin = true;
     }
-  } catch (err) {
-    window.location.href = '/login.html';
-  }
+  } catch (err) { window.location.href = '/login.html'; }
 }
-
 async function logout() {
   if (!confirm("Are you sure you want to logout?")) return;
   await fetch('/api/logout', { method: 'POST', credentials: 'include' });
   window.location.href = '/login.html';
 }
-
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('overlay').classList.toggle('hidden');
 }
-
 async function loadData() {
-  if (!subjectId) {
-    document.getElementById('main-content').innerHTML = `<p class="text-center text-red-500 py-20">No subject selected.</p>`;
-    return;
-  }
+  if (!subjectId) { document.getElementById('main-content').innerHTML = `<p class="text-center text-red-500 py-20">No subject selected.</p>`; return; }
   try {
     const chaptersRes = await fetch(`/api/chapters?subjectId=${subjectId}`, { credentials: 'include' });
     const chapters = await chaptersRes.json();
@@ -528,12 +508,8 @@ async function loadData() {
     allLectures = lectures;
     renderSidebar(chapters);
     renderLectures(lectures);
-  } catch (err) {
-    console.error(err);
-    document.getElementById('main-content').innerHTML = `<p class="text-center text-red-500 py-20">Failed to load data. Please login again.</p>`;
-  }
+  } catch (err) { console.error(err); document.getElementById('main-content').innerHTML = `<p class="text-center text-red-500 py-20">Failed to load data.</p>`; }
 }
-
 function renderSidebar(chapters) {
   const container = document.getElementById('chapters-list');
   container.innerHTML = '';
@@ -542,21 +518,14 @@ function renderSidebar(chapters) {
     const div = document.createElement('div');
     div.className = `${active} px-4 py-3 text-sm cursor-pointer hover:bg-gray-100 rounded-xl`;
     div.textContent = ch.title;
-    div.onclick = () => {
-      selectChapter(ch._id);
-      if (window.innerWidth < 768) toggleSidebar();
-    };
+    div.onclick = () => { selectChapter(ch._id); if (window.innerWidth < 768) toggleSidebar(); };
     container.appendChild(div);
   });
 }
-
 function renderLectures(lectures) {
   const container = document.getElementById('main-content');
   let html = '';
-  if (lectures.length === 0) {
-    container.innerHTML = `<p class="text-center text-gray-500 py-20">No lectures found.</p>`;
-    return;
-  }
+  if (lectures.length === 0) { container.innerHTML = `<p class="text-center text-gray-500 py-20">No lectures found.</p>`; return; }
   lectures.forEach(lec => {
     const imageUrl = lec.imageUrl || "https://via.placeholder.com/80x80/1f2937/ffffff?text=Instructor";
     const isCompleted = lec.completed === true;
@@ -565,42 +534,26 @@ function renderLectures(lectures) {
         <img src="${imageUrl}" class="w-16 h-16 rounded-2xl object-cover flex-shrink-0">
         <div class="flex-1">
           <div class="flex justify-between items-start">
-            <div>
-              <span class="text-xs text-gray-500">${lec.date || 'N/A'} • ${lec.duration || '45m'}</span>
-              <h3 class="font-semibold text-base mt-1 line-clamp-2">${lec.title}</h3>
-            </div>
-            <button onclick="markLectureComplete('${lec._id}')"
-                    class="w-9 h-9 flex items-center justify-center rounded-full border-2 flex-shrink-0 ${isCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-green-500 hover:bg-green-50'}">
-              ${isCompleted ? '<i class="fa-solid fa-check"></i>' : '<i class="fa-solid fa-check text-gray-400"></i>'}
-            </button>
+            <div><span class="text-xs text-gray-500">${lec.date || 'N/A'} • ${lec.duration || '45m'}</span><h3 class="font-semibold text-base mt-1 line-clamp-2">${lec.title}</h3></div>
+            <button onclick="markLectureComplete('${lec._id}')" class="w-9 h-9 flex items-center justify-center rounded-full border-2 flex-shrink-0 ${isCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-green-500 hover:bg-green-50'}">${isCompleted ? '<i class="fa-solid fa-check"></i>' : '<i class="fa-solid fa-check text-gray-400"></i>'}</button>
           </div>
           <div class="flex gap-3 mt-5">
-            <button onclick="playVideo('${lec.youtubeId || ''}')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2">
-              <i class="fa-solid fa-play"></i> Watch
-            </button>
-            <button onclick="showNotesModal('${lec.pdfLink || ''}', '${lec.dppLink || ''}')" class="flex-1 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2">
-              <i class="fa-solid fa-book-open"></i> Notes & More
-            </button>
+            <button onclick="playVideo('${lec.youtubeId || ''}')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-play"></i> Watch</button>
+            <button onclick="showNotesModal('${lec.pdfLink || ''}', '${lec.dppLink || ''}')" class="flex-1 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-book-open"></i> Notes & More</button>
           </div>
         </div>
       </div>`;
   });
   container.innerHTML = html;
 }
-
 function showNotesModal(pdfLink, dppLink) {
-  currentPdfLink = pdfLink;
-  currentDppLink = dppLink;
-  if (!pdfLink && !dppLink) {
-    showToast("Notes and DPP will be added soon for this lecture!", "info");
-    return;
-  }
+  currentPdfLink = pdfLink; currentDppLink = dppLink;
+  if (!pdfLink && !dppLink) { showToast("Notes and DPP will be added soon for this lecture!", "info"); return; }
   document.getElementById('notes-modal').classList.remove('hidden');
 }
 function hideNotesModal() { document.getElementById('notes-modal').classList.add('hidden'); }
 function openPdf() { if (currentPdfLink) window.open(currentPdfLink, '_blank'); hideNotesModal(); }
 function openDpp() { if (currentDppLink) window.open(currentDppLink, '_blank'); hideNotesModal(); }
-
 function applyFilters() {
   const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
   const filterType = document.getElementById('filter-select').value;
@@ -613,7 +566,6 @@ function applyFilters() {
   });
   renderLectures(filtered);
 }
-
 async function markLectureComplete(lectureId) {
   try {
     const res = await fetch(`/api/lectures/${lectureId}/complete`, { method: 'POST', credentials: 'include' });
@@ -622,7 +574,6 @@ async function markLectureComplete(lectureId) {
     else showToast(data.msg || "Failed to mark completed", "error");
   } catch (err) { showToast("Please login first", "error"); }
 }
-
 function selectChapter(chapterId) {
   currentChapterId = chapterId;
   document.getElementById('search-input').value = '';
@@ -631,7 +582,7 @@ function selectChapter(chapterId) {
   if (window.innerWidth < 768) toggleSidebar();
 }
 
-// ========== ADVANCED VIDEO PLAYER ==========
+// ========== ENHANCED VIDEO PLAYER (with quality & PiP) ==========
 let player = null, playerReady = false, currentVideoId = null, progressInterval = null, isDraggingProgress = false;
 let currentVolume = 70, isMuted = false, currentPlaybackRate = 1;
 let controlsHideTimeout = null;
@@ -646,6 +597,8 @@ const timeDisplaySpan = document.getElementById('timeDisplay');
 const volumeBtn = document.getElementById('volumeBtn');
 const volumeSlider = document.getElementById('volumeSlider');
 const speedDropdown = document.getElementById('speedDropdown');
+const qualityDropdown = document.getElementById('qualityDropdown');
+const pipBtn = document.getElementById('pipBtn');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const centerIconDiv = document.getElementById('centerPlayIcon');
 const messagePanel = document.getElementById('messagePanel');
@@ -653,27 +606,21 @@ const errorTextSpan = document.getElementById('errorText');
 const closeModalBtn = document.getElementById('closeVideoModal');
 const customControls = document.getElementById('customControls');
 
-// Auto-hide controls after inactivity
 function resetControlsHideTimer() {
   if (customControls) {
     customControls.classList.remove('hide-controls');
     if (controlsHideTimeout) clearTimeout(controlsHideTimeout);
     controlsHideTimeout = setTimeout(() => {
-      if (player && playerReady && !isDraggingProgress && customControls) {
-        customControls.classList.add('hide-controls');
-      }
+      if (player && playerReady && !isDraggingProgress && customControls) customControls.classList.add('hide-controls');
     }, 2000);
   }
 }
-
 function showControls() {
   if (customControls) {
     customControls.classList.remove('hide-controls');
     resetControlsHideTimer();
   }
 }
-
-// Mouse/touch events on video stage to show controls
 function bindControlEvents() {
   const stage = document.querySelector('#videoPlayerModal .video-stage');
   if (stage) {
@@ -681,16 +628,11 @@ function bindControlEvents() {
     stage.addEventListener('click', showControls);
     stage.addEventListener('touchstart', showControls);
   }
-  // Also on the controls themselves to keep them visible
   if (customControls) {
-    customControls.addEventListener('mouseenter', () => {
-      if (controlsHideTimeout) clearTimeout(controlsHideTimeout);
-      customControls.classList.remove('hide-controls');
-    });
+    customControls.addEventListener('mouseenter', () => { if (controlsHideTimeout) clearTimeout(controlsHideTimeout); customControls.classList.remove('hide-controls'); });
     customControls.addEventListener('mouseleave', resetControlsHideTimer);
   }
 }
-
 function loadYouTubeAPI() {
   if (window.YT && window.YT.Player) { createPlayer(currentVideoId); return; }
   const tag = document.createElement('script');
@@ -712,10 +654,11 @@ function onPlayerReady(e) {
   updateVolumeIcon(currentVolume);
   player.setPlaybackRate(currentPlaybackRate);
   speedDropdown.value = currentPlaybackRate;
+  // Quality will be set by user via dropdown
   startProgressTimer();
   player.playVideo();
   bindControlEvents();
-  resetControlsHideTimer(); // start auto-hide timer
+  resetControlsHideTimer();
 }
 function onPlayerStateChange(e) {
   const state = e.data;
@@ -794,7 +737,24 @@ function changeSpeed() {
   showControls();
 }
 speedDropdown.addEventListener('change', changeSpeed);
-
+function changeQuality() {
+  const quality = qualityDropdown.value;
+  if (!player || !playerReady) return;
+  if (quality === 'auto') player.setPlaybackQuality('auto');
+  else player.setPlaybackQuality(quality);
+  showControls();
+}
+qualityDropdown.addEventListener('change', changeQuality);
+function togglePictureInPicture() {
+  if (document.pictureInPictureElement) {
+    document.exitPictureInPicture();
+  } else if (iframe && iframe.requestPictureInPicture) {
+    iframe.requestPictureInPicture();
+  } else {
+    showToast("Picture-in-Picture not supported", "info");
+  }
+}
+pipBtn.addEventListener('click', togglePictureInPicture);
 function toggleFullscreen() {
   const container = document.querySelector('#videoPlayerModal .player-card');
   if (!document.fullscreenElement) container.requestFullscreen().catch(e=>console.warn(e));
@@ -844,7 +804,7 @@ function playVideo(videoId) {
   else loadYouTubeAPI();
 }
 
-// ========== MANAGE MODAL (stays open after actions) ==========
+// ========== MANAGE MODAL FUNCTIONS (unchanged) ==========
 function showManageModal() { manageMode = 1; document.getElementById('manage-modal').classList.remove('hidden'); updateManageUI(); }
 function hideManageModal() { document.getElementById('manage-modal').classList.add('hidden'); }
 function setManageMode(mode) { manageMode = mode; updateManageUI(); }
@@ -903,18 +863,17 @@ async function adminLogin() {
   } catch(e) { showToast("Cannot connect to server", "error"); }
 }
 function hideLoginModal() { document.getElementById('loginModal').classList.add('hidden'); }
-
 async function executeManageAction() {
   if (!isAdmin) { showToast("Please login as Admin first", "error"); hideManageModal(); return; }
   try {
-    if (manageMode === 1) { // Add Chapter
+    if (manageMode === 1) {
       const title = document.getElementById('chapter-title').value.trim();
       if (!title) { showToast("Chapter title is required", "error"); return; }
       await fetch('/api/chapters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subjectId, title, order: Date.now() }), credentials: 'include' });
       showToast("Chapter added successfully!", "success");
       document.getElementById('chapter-title').value = '';
     }
-    else if (manageMode === 2) { // Add Lecture
+    else if (manageMode === 2) {
       const title = document.getElementById('lecture-title').value.trim();
       const chapterId = document.getElementById('lecture-chapter-select').value;
       if (!title || !chapterId) { showToast("Title and Chapter are required", "error"); return; }
@@ -926,21 +885,21 @@ async function executeManageAction() {
       document.getElementById('lecture-pdf').value = '';
       document.getElementById('lecture-dpp').value = '';
     }
-    else if (manageMode === 3) { // Delete Chapter
+    else if (manageMode === 3) {
       const chapterId = document.getElementById('delete-chapter-select').value;
       if (!chapterId) { showToast("Select a chapter to delete", "error"); return; }
       if (!confirm("Delete this chapter and all its lectures?")) return;
       await fetch(`/api/chapters/${chapterId}`, { method: 'DELETE', credentials: 'include' });
       showToast("Chapter deleted successfully!", "success");
     }
-    else if (manageMode === 4) { // Delete Lecture
+    else if (manageMode === 4) {
       const lectureId = document.getElementById('delete-lecture-select').value;
       if (!lectureId) { showToast("Select a lecture to delete", "error"); return; }
       if (!confirm("Delete this lecture?")) return;
       await fetch(`/api/lectures/${lectureId}`, { method: 'DELETE', credentials: 'include' });
       showToast("Lecture deleted successfully!", "success");
     }
-    else if (manageMode === 5) { // Update Lecture
+    else if (manageMode === 5) {
       const lectureId = document.getElementById('update-lecture-select').value;
       if (!lectureId) { showToast("Select a lecture to update", "error"); return; }
       const updateData = { title: document.getElementById('update-title').value.trim(), youtubeId: document.getElementById('update-youtube').value.trim(), imageUrl: document.getElementById('update-image').value.trim(), pdfLink: document.getElementById('update-pdf').value.trim(), dppLink: document.getElementById('update-dpp').value.trim() };
@@ -956,8 +915,7 @@ async function executeManageAction() {
     if (manageMode === 5) populateUpdateChapterSelect();
   } catch (err) { console.error(err); showToast("Action failed. Check console.", "error"); }
 }
-
 window.onload = async () => { await checkAuth(); await loadData(); };
 </script>
 </body>
-</html>
+  </html>
