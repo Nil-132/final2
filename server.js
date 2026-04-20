@@ -1,3 +1,4 @@
+// server.js - PRODUCTION READY with performance improvements
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -9,17 +10,30 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const compression = require('compression');  // 👈 NEW: gzip compression
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
+app.use(compression());  // 👈 Enable gzip compression for all responses
 
-// SIMPLIFIED CORS - allows all origins (since frontend/backend are same domain)
-//app.use(cors({
-//  origin: true,        // This allows any origin – safe for same-domain requests
-//  credentials: true
-//}));
+// CORS – restrict to your frontend domain for security
+const allowedOrigins = [
+  process.env.BASE_URL,
+  'http://localhost:3000'
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -108,7 +122,49 @@ mongoose.connection.once('open', async () => {
   await seedSubjects();
 });
 
-// ========== API ROUTES ==========
+// ========== NEW: Combined Subjects with Progress (FAST) ==========
+app.get('/api/subjects/progress', authenticate, async (req, res) => {
+  try {
+    const subjects = await Subject.find().sort({ order: 1 });
+    const userId = req.user.id;
+
+    // Get all completed lecture IDs for this user in one query
+    const progress = await Progress.find({ user: userId, completed: true }).select('lecture');
+    const completedLectureIds = new Set(progress.map(p => p.lecture.toString()));
+
+    // Get total lecture count per subject
+    const lectureCounts = await Lecture.aggregate([
+      { $group: { _id: '$subjectId', total: { $sum: 1 } } }
+    ]);
+    const totalMap = new Map(lectureCounts.map(l => [l._id, l.total]));
+
+    // Get completed count per subject
+    const allLectures = await Lecture.find({ subjectId: { $in: subjects.map(s => s._id) } }).select('subjectId');
+    const completedPerSubject = {};
+    allLectures.forEach(lec => {
+      if (completedLectureIds.has(lec._id.toString())) {
+        const subj = lec.subjectId;
+        completedPerSubject[subj] = (completedPerSubject[subj] || 0) + 1;
+      }
+    });
+
+    const result = subjects.map(sub => ({
+      ...sub.toObject(),
+      totalLectures: totalMap.get(sub._id) || 0,
+      completedLectures: completedPerSubject[sub._id] || 0,
+      progressPercent: totalMap.get(sub._id) 
+        ? Math.round((completedPerSubject[sub._id] || 0) / totalMap.get(sub._id) * 100) 
+        : 0
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, msg: "Failed to load subjects progress" });
+  }
+});
+
+// ========== Existing API Routes (unchanged except minor improvements) ==========
 
 app.get('/api/live/today', authenticate, async (req, res) => {
   try {
@@ -260,22 +316,25 @@ app.get('/api/chapters', async (req, res) => {
   }
 });
 
+// Lectures endpoint with pagination (optional but good)
 app.get('/api/lectures', authenticate, async (req, res) => {
   try {
-    const { chapterId, subjectId } = req.query;
+    const { chapterId, subjectId, limit = 100, skip = 0 } = req.query;
     let filter = {};
     if (chapterId) filter.chapterId = chapterId;
     else if (subjectId) filter.subjectId = subjectId;
 
-    const lectures = await Lecture.find(filter);
-    const progress = await Progress.find({ user: req.user.id });
+    const total = await Lecture.countDocuments(filter);
+    const lectures = await Lecture.find(filter).sort({ order: 1 }).skip(parseInt(skip)).limit(parseInt(limit));
+    const progress = await Progress.find({ user: req.user.id, lecture: { $in: lectures.map(l => l._id) } });
     const completedMap = new Map(progress.map(p => [p.lecture.toString(), true]));
 
     const result = lectures.map(lec => ({
       ...lec.toObject(),
       completed: !!completedMap.get(lec._id.toString())
     }));
-    res.json(result);
+
+    res.json({ data: result, total, skip, limit });
   } catch (err) {
     res.status(500).json({ success: false, msg: "Failed to load lectures" });
   }
