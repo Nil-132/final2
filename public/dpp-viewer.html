@@ -48,7 +48,24 @@
         // Global variables
         let currentDpp = null;
         let chartInstance = null;
-        const userId = document.querySelector('meta[name="user-id"]')?.content || '';
+        let userId = null;
+
+async function fetchUser() {
+    try {
+        const res = await fetch('/api/me', { credentials: 'include' });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.user) {
+                userId = data.user.id || data.user._id;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not fetch user ID');
+    }
+}
+
+// Call this before any authenticated operations
+await fetchUser();
         
         // DOM elements
         const selectEl = document.getElementById('lecture-select');
