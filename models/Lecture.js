@@ -1,4 +1,3 @@
-// models/Lecture.js - Updated (removed global completed field)
 const mongoose = require('mongoose');
 
 const lectureSchema = new mongoose.Schema({
@@ -10,11 +9,15 @@ const lectureSchema = new mongoose.Schema({
   youtubeId: String,
   imageUrl: String,
 
-  // Notes & DPP Features (already present in your original)
-  pdfLink: String,     // Google Drive / direct link for Notes PDF
-  dppLink: String      // Google Drive / direct link for DPP PDF
+  // Notes & DPP Features
+  pdfLink: String,
+  dppLink: String
 }, { timestamps: true });
 
-const Lecture = mongoose.model('Lecture', lectureSchema);
+// Compound index for queries that filter by both subjectId and chapterId
+lectureSchema.index({ subjectId: 1, chapterId: 1 });
 
-module.exports = Lecture;
+// Index for sorting by order (if you add an 'order' field later)
+// lectureSchema.index({ order: 1 });
+
+module.exports = mongoose.model('Lecture', lectureSchema);
