@@ -17,15 +17,12 @@
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
-    <!-- Hidden meta tag for user ID (populated by server template) -->
-    <meta name="user-id" content="">
-
     <div class="max-w-4xl mx-auto py-8 px-4">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-pencil-alt mr-2 text-blue-600"></i>Daily Practice Problems
             </h1>
-            <a href="/dashboard" class="text-blue-600 hover:underline">&larr; Back to Dashboard</a>
+            <a href="/dashboard.html" class="text-blue-600 hover:underline">&larr; Back to Dashboard</a>
         </div>
         
         <!-- Lecture Selection -->
@@ -50,26 +47,29 @@
         let chartInstance = null;
         let userId = null;
 
-async function fetchUser() {
-    try {
-        const res = await fetch('/api/me', { credentials: 'include' });
-        if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.user) {
-                userId = data.user.id || data.user._id;
-            }
-        }
-    } catch (e) {
-        console.warn('Could not fetch user ID');
-    }
-}
-
-// Call this before any authenticated operations
-await fetchUser();
-        
         // DOM elements
         const selectEl = document.getElementById('lecture-select');
         const containerEl = document.getElementById('dpp-container');
+
+        // Async initialization
+        (async function init() {
+            await fetchUser();
+            await loadLectures();
+        })();
+
+        async function fetchUser() {
+            try {
+                const res = await fetch('/api/me', { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.user) {
+                        userId = data.user.id || data.user._id;
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not fetch user ID');
+            }
+        }
 
         // Fetch and populate lecture dropdown
         async function loadLectures() {
@@ -222,7 +222,8 @@ await fetchUser();
                         lectureId: currentDpp.lectureId,
                         lectureName: currentDpp.lectureName,
                         answers
-                    })
+                    }),
+                    credentials: 'include'
                 });
                 
                 const data = await res.json();
@@ -253,7 +254,7 @@ await fetchUser();
                 
                 const radios = div.querySelectorAll('input[type="radio"]');
                 // Remove previous markings
-                div.classList.remove('border-green-500', 'border-red-500');
+                div.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
                 
                 // Find the submitted answer
                 const answer = result.answers?.find(a => a.questionId === qId);
@@ -282,7 +283,7 @@ await fetchUser();
             // Fetch historical attempts
             let attempts = [];
             try {
-                const analyticsRes = await fetch(`/api/dpp/analytics/${lectureId}`);
+                const analyticsRes = await fetch(`/api/dpp/analytics/${lectureId}`, { credentials: 'include' });
                 if (analyticsRes.ok) {
                     const analytics = await analyticsRes.json();
                     attempts = analytics.attempts || [];
@@ -366,9 +367,6 @@ await fetchUser();
 
         // Event listeners
         selectEl.addEventListener('change', (e) => loadDpp(e.target.value));
-        
-        // Initialize page
-        loadLectures();
     </script>
 </body>
 </html>
