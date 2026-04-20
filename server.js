@@ -111,6 +111,7 @@ mongoose.connection.once('open', async () => {
 
 // ========== API ROUTES ==========
 
+app.use('/api/dpp', dppRoutes);
 // Get today's live classes
 app.get('/api/live/today', authenticate, async (req, res) => {
   try {
