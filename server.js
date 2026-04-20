@@ -1,4 +1,4 @@
-// server.js - Production Ready for Render
+// server.js - Production Ready for Render (with DPP Integration)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -10,6 +10,7 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+
 // Existing imports...
 const authRoutes = require('./routes/auth');
 const lectureRoutes = require('./routes/lectures');
@@ -17,6 +18,7 @@ const lectureRoutes = require('./routes/lectures');
 
 // NEW: Import DPP routes
 const dppRoutes = require('./routes/dpp');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -50,6 +52,10 @@ const Chapter = require('./models/Chapter');
 const Progress = require('./models/Progress');
 const LiveSchedule = require('./models/LiveSchedule');
 const Subject = require('./models/Subject');
+
+// NEW: DPP Models (already imported in dpp routes but needed for seeding if any)
+const Dpp = require('./models/Dpp');
+const DppResult = require('./models/DppResult');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
 
@@ -124,6 +130,7 @@ app.use('/api/lectures', lectureRoutes);
 
 // NEW: Register DPP API routes
 app.use('/api/dpp', dppRoutes);
+
 // Get today's live classes
 app.get('/api/live/today', authenticate, async (req, res) => {
   try {
