@@ -87,18 +87,9 @@
   <script>
     let isAdmin = false;
 
-    async function authFetch(url, options = {}) {
-      const res = await fetch(url, { ...options, credentials: 'include' });
-      if (res.status === 401) {
-        window.location.href = '/login.html';
-        throw new Error('Unauthorized');
-      }
-      return res;
-    }
-
     async function checkAdmin() {
       try {
-        const res = await authFetch('/api/me');
+        const res = await fetch('/api/me', { credentials: 'include' });
         const data = await res.json();
         if (data.success) {
           document.getElementById('user-name').textContent = data.user.name || 'Student';
@@ -114,38 +105,89 @@
       }
     }
 
-    // ========== OPTIMIZED RENDER FUNCTION ==========
-    // Uses the new /api/subjects/progress endpoint (single API call)
-    async function renderSubjects() {
+        async function renderSubjects() {
       const container = document.getElementById('subjects-container');
       container.innerHTML = '<p class="col-span-3 text-center py-12 text-gray-500">Loading subjects...</p>';
+
       try {
-        // NEW: Single API call that returns subjects with pre-calculated progress
-        const res = await authFetch('/api/subjects/progress');
+        const res = await fetch('/api/subjects', { credentials: 'include' });
         let subjects = await res.json();
 
-        // Fallback if the new endpoint fails or returns empty
+        // If backend returns empty, use your original 5 as base
         if (!subjects || subjects.length === 0) {
-          console.warn('Falling back to manual subject loading');
           subjects = [
-            { _id: "quant", name: "Quantitative Aptitude", icon: "📊", color: "blue", totalLectures: 0, completedLectures: 0, progressPercent: 0 },
-            { _id: "reasoning", name: "Reasoning Ability", icon: "🧠", color: "purple", totalLectures: 0, completedLectures: 0, progressPercent: 0 },
-            { _id: "english", name: "English Language", icon: "📖", color: "pink", totalLectures: 0, completedLectures: 0, progressPercent: 0 },
-            { _id: "banking", name: "Banking Awareness", icon: "🏦", color: "emerald", totalLectures: 0, completedLectures: 0, progressPercent: 0 },
-            { _id: "current", name: "Current Affairs", icon: "📰", color: "orange", totalLectures: 0, completedLectures: 0, progressPercent: 0 }
+            { id: "quant", name: "Quantitative Aptitude", color: "blue", icon: "📊" },
+            { id: "reasoning", name: "Reasoning Ability", color: "purple", icon: "🧠" },
+            { id: "english", name: "English Language", color: "pink", icon: "📖" },
+            { id: "banking", name: "Banking Awareness", color: "emerald", icon: "🏦" },
+            { id: "current", name: "Current Affairs", color: "orange", icon: "📰" }
           ];
         }
 
         let html = '';
+
+        // First show the original 5 subjects
+        const originalSubjects = [
+          { id: "quant", name: "Quantitative Aptitude", color: "blue", icon: "📊" },
+          { id: "reasoning", name: "Reasoning Ability", color: "purple", icon: "🧠" },
+          { id: "english", name: "English Language", color: "pink", icon: "📖" },
+          { id: "banking", name: "Banking Awareness", color: "emerald", icon: "🏦" },
+          { id: "current", name: "Current Affairs", color: "orange", icon: "📰" }
+        ];
+
+        for (let sub of originalSubjects) {
+          let total = 0, progress = 0;
+          try {
+            const lecRes = await fetch(`/api/lectures?subjectId=${sub.id}`, { credentials: 'include' });
+            if (lecRes.ok) {
+              const lectures = await lecRes.json();
+              total = lectures.length;
+              const completed = lectures.filter(l => l.completed === true).length;
+              progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            }
+          } catch (e) {}
+
+          html += `
+            <div class="subject-card bg-white rounded-3xl p-8 border border-gray-100 relative">
+              ${isAdmin ? `<button onclick="deleteSubject('${sub.id}')" class="absolute top-4 right-4 text-red-500 hover:text-red-700 text-xl"><i class="fas fa-trash"></i></button>` : ''}
+              <div onclick="openSubject('${sub.id}', '${sub.name}')" class="cursor-pointer">
+                <div class="flex justify-between items-start mb-8">
+                  <div class="text-6xl">${sub.icon}</div>
+                  <div class="text-right">
+                    <div class="text-sm text-gray-500">${total} Lectures</div>
+                    <div class="text-5xl font-bold text-${sub.color}-600 mt-1">${progress}%</div>
+                  </div>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-2">${sub.name}</h3>
+                <p class="text-gray-600 mb-8">Master concepts with high-quality lectures</p>
+                <div class="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-${sub.color}-600 rounded-full transition-all" style="width: ${progress}%"></div>
+                </div>
+              </div>
+            </div>`;
+        }
+
+        // Then show newly added subjects at the end
         for (let sub of subjects) {
-          const subjectId = sub._id;
-          const total = sub.totalLectures || 0;
-          const progress = sub.progressPercent || 0;
+          const subjectId = sub._id || sub.id;
+          // Skip if it's one of the original 5 (to avoid duplicates)
+          if (originalSubjects.some(o => o.name === sub.name)) continue;
+
+          let total = 0, progress = 0;
+          try {
+            const lecRes = await fetch(`/api/lectures?subjectId=${subjectId}`, { credentials: 'include' });
+            if (lecRes.ok) {
+              const lectures = await lecRes.json();
+              total = lectures.length;
+              const completed = lectures.filter(l => l.completed === true).length;
+              progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            }
+          } catch (e) {}
 
           html += `
             <div class="subject-card bg-white rounded-3xl p-8 border border-gray-100 relative">
               ${isAdmin ? `<button onclick="deleteSubject('${subjectId}')" class="absolute top-4 right-4 text-red-500 hover:text-red-700 text-xl"><i class="fas fa-trash"></i></button>` : ''}
-              <div onclick="openSubject('${subjectId}', '${sub.name.replace(/'/g, "\\'")}')" class="cursor-pointer">
+              <div onclick="openSubject('${subjectId}', '${sub.name}')" class="cursor-pointer">
                 <div class="flex justify-between items-start mb-8">
                   <div class="text-6xl">${sub.icon || '📚'}</div>
                   <div class="text-right">
@@ -161,10 +203,11 @@
               </div>
             </div>`;
         }
+
         container.innerHTML = html;
       } catch (err) {
         console.error(err);
-        container.innerHTML = `<p class="col-span-3 text-center py-12 text-red-500">Could not load subjects. Please refresh the page.</p>`;
+        container.innerHTML = `<p class="col-span-3 text-center py-12 text-red-500">Could not load subjects from server.</p>`;
       }
     }
 
@@ -172,41 +215,63 @@
       window.location.href = `/lectures.html?subjectId=${subjectId}&subjectName=${encodeURIComponent(subjectName)}`;
     }
 
-    function showAddSubjectModal() { document.getElementById('add-subject-modal').classList.remove('hidden'); }
-    function hideAddSubjectModal() { document.getElementById('add-subject-modal').classList.add('hidden'); }
+    function showAddSubjectModal() {
+      document.getElementById('add-subject-modal').classList.remove('hidden');
+    }
 
+    function hideAddSubjectModal() {
+      document.getElementById('add-subject-modal').classList.add('hidden');
+    }
+
+    // ==================== NEW: Real Backend Integration ====================
     async function addNewSubject() {
       const name = document.getElementById('new-subject-name').value.trim();
       const icon = document.getElementById('new-subject-icon').value.trim() || "📚";
       const colorSelect = document.getElementById('new-subject-color').value;
-      if (!name) { alert("Please enter subject name"); return; }
+
+      if (!name) {
+        alert("Please enter subject name");
+        return;
+      }
+
       try {
-        const res = await authFetch('/api/subjects', {
+        const res = await fetch('/api/subjects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, icon, color: colorSelect })
+          credentials: 'include',
+          body: JSON.stringify({
+            name: name,
+            icon: icon,
+            color: colorSelect
+          })
         });
+
         const data = await res.json();
         if (data.success) {
           alert(`✅ Subject "${name}" added successfully!`);
           hideAddSubjectModal();
-          await renderSubjects();
+          renderSubjects();        // Refresh the page to show new subject
         } else {
           alert(data.msg || "Failed to add subject");
         }
       } catch (err) {
-        alert("Server error while adding subject.");
+        alert("Server error while adding subject. Make sure server is running.");
       }
     }
 
     async function deleteSubject(subjectId) {
       if (!confirm(`Delete subject "${subjectId}" and all its lectures?`)) return;
+
       try {
-        const res = await authFetch(`/api/subjects/${subjectId}`, { method: 'DELETE' });
+        const res = await fetch(`/api/subjects/${subjectId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
         const data = await res.json();
         if (data.success) {
-          alert(`🗑️ Subject deleted successfully!`);
-          await renderSubjects();
+          alert(`🗑️ Subject "${subjectId}" deleted successfully!`);
+          renderSubjects();
         } else {
           alert("Failed to delete subject");
         }
@@ -214,11 +279,16 @@
         alert("Server error while deleting subject");
       }
     }
+    // =====================================================================
 
     async function logout() {
       if (!confirm("Are you sure you want to logout?")) return;
-      await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-      window.location.href = '/login.html';
+      try {
+        await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+        window.location.href = '/login.html';
+      } catch (err) {
+        alert("Logout failed.");
+      }
     }
 
     window.onload = async () => {
