@@ -1,4 +1,4 @@
-this is the code that i used and that is running the on the render server, so is it safe to use , require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
