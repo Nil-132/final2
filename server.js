@@ -10,6 +10,12 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+// Existing imports...
+const authRoutes = require('./routes/auth');
+const lectureRoutes = require('./routes/lectures');
+// ... other routes
+
+// NEW: Import DPP routes
 const dppRoutes = require('./routes/dpp');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -111,6 +117,12 @@ mongoose.connection.once('open', async () => {
 
 // ========== API ROUTES ==========
 
+// Existing route registrations...
+app.use('/auth', authRoutes);
+app.use('/api/lectures', lectureRoutes);
+// ... other routes
+
+// NEW: Register DPP API routes
 app.use('/api/dpp', dppRoutes);
 // Get today's live classes
 app.get('/api/live/today', authenticate, async (req, res) => {
