@@ -1,4 +1,4 @@
-// server.js - PRODUCTION READY with performance improvements
+// server.js - PRODUCTION READY with existing data support
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -10,15 +10,15 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const compression = require('compression');  // 👈 NEW: gzip compression
+const compression = require('compression');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
-app.use(compression());  // 👈 Enable gzip compression for all responses
+app.use(compression());
 
-// CORS – restrict to your frontend domain for security
+// CORS – allow your frontend domain(s)
 const allowedOrigins = [
   process.env.BASE_URL,
   'http://localhost:3000'
@@ -122,40 +122,44 @@ mongoose.connection.once('open', async () => {
   await seedSubjects();
 });
 
-// ========== NEW: Combined Subjects with Progress (FAST) ==========
+// ========== COMBINED SUBJECTS WITH PROGRESS (MATCH BY NAME) ==========
 app.get('/api/subjects/progress', authenticate, async (req, res) => {
   try {
     const subjects = await Subject.find().sort({ order: 1 });
     const userId = req.user.id;
 
-    // Get all completed lecture IDs for this user in one query
+    // Get all completed lecture IDs for this user
     const progress = await Progress.find({ user: userId, completed: true }).select('lecture');
     const completedLectureIds = new Set(progress.map(p => p.lecture.toString()));
 
-    // Get total lecture count per subject
+    // Get lecture counts per subject NAME (since Lecture.subjectId stores the subject name string)
     const lectureCounts = await Lecture.aggregate([
       { $group: { _id: '$subjectId', total: { $sum: 1 } } }
     ]);
     const totalMap = new Map(lectureCounts.map(l => [l._id, l.total]));
 
-    // Get completed count per subject
-    const allLectures = await Lecture.find({ subjectId: { $in: subjects.map(s => s._id) } }).select('subjectId');
+    // Get completed counts per subject NAME
+    const allLectures = await Lecture.find().select('subjectId');
     const completedPerSubject = {};
     allLectures.forEach(lec => {
       if (completedLectureIds.has(lec._id.toString())) {
-        const subj = lec.subjectId;
-        completedPerSubject[subj] = (completedPerSubject[subj] || 0) + 1;
+        const subjName = lec.subjectId;
+        completedPerSubject[subjName] = (completedPerSubject[subjName] || 0) + 1;
       }
     });
 
-    const result = subjects.map(sub => ({
-      ...sub.toObject(),
-      totalLectures: totalMap.get(sub._id) || 0,
-      completedLectures: completedPerSubject[sub._id] || 0,
-      progressPercent: totalMap.get(sub._id) 
-        ? Math.round((completedPerSubject[sub._id] || 0) / totalMap.get(sub._id) * 100) 
-        : 0
-    }));
+    // Match subjects by name (existing data uses subject name strings)
+    const result = subjects.map(sub => {
+      const subName = sub.name;
+      const total = totalMap.get(subName) || 0;
+      const completed = completedPerSubject[subName] || 0;
+      return {
+        ...sub.toObject(),
+        totalLectures: total,
+        completedLectures: completed,
+        progressPercent: total > 0 ? Math.round((completed / total) * 100) : 0
+      };
+    });
 
     res.json(result);
   } catch (err) {
@@ -164,7 +168,7 @@ app.get('/api/subjects/progress', authenticate, async (req, res) => {
   }
 });
 
-// ========== Existing API Routes (unchanged except minor improvements) ==========
+// ========== OTHER API ROUTES ==========
 
 app.get('/api/live/today', authenticate, async (req, res) => {
   try {
@@ -316,7 +320,7 @@ app.get('/api/chapters', async (req, res) => {
   }
 });
 
-// Lectures endpoint with pagination (optional but good)
+// Lectures with pagination
 app.get('/api/lectures', authenticate, async (req, res) => {
   try {
     const { chapterId, subjectId, limit = 100, skip = 0 } = req.query;
@@ -371,6 +375,7 @@ app.delete('/api/live/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
+// Subject CRUD (basic)
 app.get('/api/subjects', authenticate, async (req, res) => {
   try {
     const subjects = await Subject.find().sort({ order: 1 });
@@ -398,6 +403,7 @@ app.delete('/api/subjects/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
+// Admin chapter & lecture management
 app.post('/api/chapters', authenticate, isAdmin, async (req, res) => {
   try { res.json(await Chapter.create(req.body)); } catch (e) { res.status(500).json({ success: false }); }
 });
@@ -417,11 +423,13 @@ app.put('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
   res.json(lecture || { success: false });
 });
 
+// Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ success: false, msg: 'Internal server error' });
 });
 
+// Catch-all to serve index.html for client-side routing
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
