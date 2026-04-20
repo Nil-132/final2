@@ -6,7 +6,7 @@
     <title>My PW - Online Learning Platform</title>
 
     <!-- Link to the Web App Manifest -->
-    <link rel="manifest" href="../model/manifest.json">
+    <link rel="manifest" href="../models/manifest.json">
     <meta name="theme-color" content="#3B82F6">
 
     <!-- Your other CSS and content -->
@@ -71,7 +71,7 @@
         // Register the Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('../model/sw.js')
+                navigator.serviceWorker.register('../models/sw.js')
                 .then(reg => console.log('Service Worker registered', reg))
                 .catch(err => console.log('Service Worker registration failed', err));
             });
