@@ -1,8 +1,22 @@
+// routes/dpp.js
 const express = require('express');
 const router = express.Router();
 const Dpp = require('../models/Dpp');
 const DppResult = require('../models/DppResult');
-const { ensureAuthenticated } = require('../config/auth'); // Adjust path to your auth middleware
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
+
+// JWT Authentication Middleware (same as in server.js)
+const authenticate = (req, res, next) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ error: 'Please log in' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired session' });
+  }
+};
 
 // @desc    Get list of all lectures that have a DPP
 // @route   GET /api/dpp/lectures
@@ -21,9 +35,7 @@ router.get('/lectures', async (req, res) => {
 router.get('/:lectureId', async (req, res) => {
   try {
     const dpp = await Dpp.findOne({ lectureId: req.params.lectureId });
-    if (!dpp) {
-      return res.status(404).json({ error: 'DPP not found' });
-    }
+    if (!dpp) return res.status(404).json({ error: 'DPP not found' });
     res.json(dpp);
   } catch (error) {
     console.error('Error fetching DPP:', error);
@@ -36,13 +48,9 @@ router.get('/:lectureId', async (req, res) => {
 router.post('/upload', async (req, res) => {
   try {
     const dppData = req.body;
-    
-    // Basic validation
     if (!dppData.lectureId || !dppData.lectureName || !Array.isArray(dppData.questions)) {
       return res.status(400).json({ error: 'Invalid DPP format' });
     }
-
-    // Use upsert to create or update
     const dpp = await Dpp.findOneAndUpdate(
       { lectureId: dppData.lectureId },
       dppData,
@@ -64,9 +72,7 @@ router.put('/:lectureId', async (req, res) => {
       req.body,
       { new: true, runValidators: true }
     );
-    if (!updatedDpp) {
-      return res.status(404).json({ error: 'DPP not found' });
-    }
+    if (!updatedDpp) return res.status(404).json({ error: 'DPP not found' });
     res.json({ success: true, dpp: updatedDpp });
   } catch (error) {
     console.error('Error updating DPP:', error);
@@ -77,16 +83,13 @@ router.put('/:lectureId', async (req, res) => {
 // @desc    Submit DPP answers and calculate score
 // @route   POST /api/dpp/submit
 // @access  Private (requires authentication)
-router.post('/submit', ensureAuthenticated, async (req, res) => {
+router.post('/submit', authenticate, async (req, res) => {
   try {
     const { lectureId, lectureName, answers } = req.body;
-    const userId = req.user._id; // Assuming Passport sets req.user
+    const userId = req.user.id;
 
-    // Fetch the DPP to get correct answers
     const dpp = await Dpp.findOne({ lectureId });
-    if (!dpp) {
-      return res.status(404).json({ error: 'DPP not found' });
-    }
+    if (!dpp) return res.status(404).json({ error: 'DPP not found' });
 
     let correctCount = 0;
     const processedAnswers = answers.map(ans => {
@@ -133,12 +136,10 @@ router.post('/submit', ensureAuthenticated, async (req, res) => {
 
 // @desc    Get user's DPP history (all attempts)
 // @route   GET /api/dpp/results/:userId?
-// @access  Private (returns own results if no userId, or admin)
-router.get('/results/:userId?', ensureAuthenticated, async (req, res) => {
+// @access  Private (returns own results if no userId)
+router.get('/results/:userId?', authenticate, async (req, res) => {
   try {
-    const targetUserId = req.params.userId || req.user._id;
-    // Optional: add admin check to allow viewing others' results
-    
+    const targetUserId = req.params.userId || req.user.id;
     const results = await DppResult.find({ userId: targetUserId })
       .sort({ submittedAt: -1 })
       .select('lectureId lectureName score correctAnswers totalQuestions submittedAt');
@@ -152,17 +153,14 @@ router.get('/results/:userId?', ensureAuthenticated, async (req, res) => {
 // @desc    Get analytics for a specific lecture across attempts
 // @route   GET /api/dpp/analytics/:lectureId
 // @access  Private
-router.get('/analytics/:lectureId', ensureAuthenticated, async (req, res) => {
+router.get('/analytics/:lectureId', authenticate, async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user.id;
     const { lectureId } = req.params;
-
     const results = await DppResult.find({ userId, lectureId })
       .sort({ submittedAt: 1 })
       .select('score correctAnswers totalQuestions submittedAt');
-
     const dpp = await Dpp.findOne({ lectureId }).select('lectureName');
-
     res.json({
       attempts: results,
       lectureName: dpp?.lectureName || lectureId,
