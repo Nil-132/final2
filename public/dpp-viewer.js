@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPP Viewer</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Optional: Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .correct-answer { background-color: #d1fae5; }
+        .incorrect-answer { background-color: #fee2e2; }
+        .tab-active { background-color: white; border-bottom: 2px solid #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Hidden meta tag for user ID (populated by server template) -->
+    <meta name="user-id" content="">
+
+    <div class="max-w-4xl mx-auto py-8 px-4">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">
+                <i class="fas fa-pencil-alt mr-2 text-blue-600"></i>Daily Practice Problems
+            </h1>
+            <a href="/dashboard" class="text-blue-600 hover:underline">&larr; Back to Dashboard</a>
+        </div>
+        
+        <!-- Lecture Selection -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <label class="block text-gray-700 font-medium mb-2">Select Lecture:</label>
+            <select id="lecture-select" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">-- Choose a lecture --</option>
+            </select>
+        </div>
+        
+        <!-- DPP Content Container -->
+        <div id="dpp-container" class="bg-white rounded-lg shadow-md p-6">
+            <p class="text-gray-500 text-center py-8">
+                <i class="fas fa-arrow-up mr-2"></i>Select a lecture to start practicing
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentDpp = null;
+        let chartInstance = null;
+        const userId = document.querySelector('meta[name="user-id"]')?.content || '';
+        
+        // DOM elements
+        const selectEl = document.getElementById('lecture-select');
+        const containerEl = document.getElementById('dpp-container');
+
+        // Fetch and populate lecture dropdown
+        async function loadLectures() {
+            try {
+                const res = await fetch('/api/dpp/lectures');
+                if (!res.ok) throw new Error('Failed to load lectures');
+                const lectures = await res.json();
+                
+                // Group by subject (optional)
+                lectures.forEach(lec => {
+                    const option = document.createElement('option');
+                    option.value = lec.lectureId;
+                    option.textContent = `${lec.lectureName} ${lec.subject ? `(${lec.subject})` : ''}`;
+                    selectEl.appendChild(option);
+                });
+
+                // Check if lectureId provided in URL query param
+                const urlParams = new URLSearchParams(window.location.search);
+                const lectureIdParam = urlParams.get('lectureId');
+                if (lectureIdParam) {
+                    // Wait a tick for options to be populated
+                    setTimeout(() => {
+                        selectEl.value = lectureIdParam;
+                        loadDpp(lectureIdParam);
+                    }, 50);
+                }
+            } catch (error) {
+                console.error('Error loading lectures:', error);
+                alert('Failed to load lectures. Please refresh.');
+            }
+        }
+
+        // Load and render DPP for selected lecture
+        async function loadDpp(lectureId) {
+            if (!lectureId) {
+                containerEl.innerHTML = `<p class="text-gray-500 text-center py-8">Select a lecture to start practicing</p>`;
+                return;
+            }
+            
+            containerEl.innerHTML = `
+                <div class="text-center py-8">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p class="mt-2 text-gray-600">Loading DPP...</p>
+                </div>
+            `;
+            
+            try {
+                const res = await fetch(`/api/dpp/${lectureId}`);
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        containerEl.innerHTML = `<p class="text-red-500 text-center py-8">No DPP found for this lecture.</p>`;
+                    } else {
+                        throw new Error('Failed to load DPP');
+                    }
+                    return;
+                }
+                const dpp = await res.json();
+                currentDpp = dpp;
+                renderDpp(dpp);
+            } catch (error) {
+                console.error('Error loading DPP:', error);
+                containerEl.innerHTML = `<p class="text-red-500 text-center py-8">Error loading DPP. Please try again.</p>`;
+            }
+        }
+
+        // Render DPP questions
+        function renderDpp(dpp) {
+            let html = `
+                <div class="mb-6">
+                    <h2 class="text-2xl font-semibold text-gray-800">${dpp.lectureName}</h2>
+                    <p class="text-gray-500 text-sm">${dpp.questions.length} questions</p>
+                </div>
+            `;
+            
+            dpp.questions.forEach((q, index) => {
+                html += `<div class="mb-8 p-5 border border-gray-200 rounded-lg hover:shadow-sm transition" data-question-id="${q.id}">`;
+                html += `<p class="font-medium text-lg mb-3">${index + 1}. ${q.questionText}</p>`;
+                
+                // Options
+                q.options.forEach((opt, optIndex) => {
+                    html += `
+                        <label class="block ml-6 mb-2 cursor-pointer">
+                            <input type="radio" name="q${index}" value="${optIndex}" class="mr-2">
+                            <span class="text-gray-700">${String.fromCharCode(65 + optIndex)}. ${opt}</span>
+                        </label>
+                    `;
+                });
+                
+                html += `</div>`;
+            });
+            
+            html += `
+                <div class="flex gap-3 mt-6">
+                    <button id="submit-dpp" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition">
+                        <i class="fas fa-paper-plane mr-2"></i>Submit Answers
+                    </button>
+                    <button id="reset-dpp" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-6 rounded-lg transition">
+                        <i class="fas fa-undo-alt mr-2"></i>Reset
+                    </button>
+                </div>
+                <div id="result-area" class="mt-6"></div>
+            `;
+            
+            containerEl.innerHTML = html;
+            
+            // Attach event listeners
+            document.getElementById('submit-dpp').addEventListener('click', submitDpp);
+            document.getElementById('reset-dpp').addEventListener('click', () => {
+                document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+                const resultArea = document.getElementById('result-area');
+                if (resultArea) resultArea.innerHTML = '';
+                if (chartInstance) {
+                    chartInstance.destroy();
+                    chartInstance = null;
+                }
+            });
+        }
+
+        // Submit answers to backend
+        async function submitDpp() {
+            if (!currentDpp) return;
+            if (!userId) {
+                alert('You must be logged in to submit answers.');
+                return;
+            }
+            
+            // Gather answers
+            const answers = [];
+            const questionDivs = document.querySelectorAll('[data-question-id]');
+            
+            questionDivs.forEach(div => {
+                const qId = div.dataset.questionId;
+                const selectedRadio = div.querySelector('input[type="radio"]:checked');
+                answers.push({
+                    questionId: qId,
+                    selectedOption: selectedRadio ? parseInt(selectedRadio.value) : -1
+                });
+            });
+            
+            // Show loading state
+            const submitBtn = document.getElementById('submit-dpp');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
+            
+            try {
+                const res = await fetch('/api/dpp/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lectureId: currentDpp.lectureId,
+                        lectureName: currentDpp.lectureName,
+                        answers
+                    })
+                });
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Submission failed');
+                
+                if (data.success) {
+                    // Mark correct/incorrect answers in UI
+                    markAnswers(data.result, currentDpp);
+                    // Display result and graph
+                    await displayResultAndGraph(data.result, currentDpp.lectureId);
+                }
+            } catch (error) {
+                console.error('Submission error:', error);
+                alert('Failed to submit: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit Answers';
+            }
+        }
+
+        // Highlight correct/incorrect answers in the UI
+        function markAnswers(result, dpp) {
+            const questionDivs = document.querySelectorAll('[data-question-id]');
+            questionDivs.forEach(div => {
+                const qId = div.dataset.questionId;
+                const question = dpp.questions.find(q => q.id === qId);
+                if (!question) return;
+                
+                const radios = div.querySelectorAll('input[type="radio"]');
+                // Remove previous markings
+                div.classList.remove('border-green-500', 'border-red-500');
+                
+                // Find the submitted answer
+                const answer = result.answers?.find(a => a.questionId === qId);
+                if (answer) {
+                    if (answer.isCorrect) {
+                        div.classList.add('border-l-4', 'border-green-500', 'bg-green-50');
+                    } else {
+                        div.classList.add('border-l-4', 'border-red-500', 'bg-red-50');
+                    }
+                }
+                
+                // Optionally show correct answer indicator
+                radios.forEach((radio, idx) => {
+                    const label = radio.closest('label');
+                    if (idx === question.correctAnswer) {
+                        label?.classList.add('text-green-700', 'font-medium');
+                    }
+                });
+            });
+        }
+
+        // Display result summary and progress graph
+        async function displayResultAndGraph(currentResult, lectureId) {
+            const resultArea = document.getElementById('result-area');
+            
+            // Fetch historical attempts
+            let attempts = [];
+            try {
+                const analyticsRes = await fetch(`/api/dpp/analytics/${lectureId}`);
+                if (analyticsRes.ok) {
+                    const analytics = await analyticsRes.json();
+                    attempts = analytics.attempts || [];
+                }
+            } catch (error) {
+                console.warn('Could not fetch analytics:', error);
+            }
+            
+            // Build result display
+            let html = `
+                <div class="mt-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xl font-bold text-gray-800">
+                            <i class="fas fa-trophy mr-2 text-yellow-500"></i>Your Score: ${currentResult.score.toFixed(1)}%
+                        </h3>
+                        <span class="text-lg font-medium ${currentResult.score >= 70 ? 'text-green-600' : 'text-orange-600'}">
+                            ${currentResult.correctCount}/${currentResult.totalQuestions} correct
+                        </span>
+                    </div>
+            `;
+            
+            // Add canvas for chart if there's more than one attempt
+            if (attempts.length > 0) {
+                html += `<div class="mt-6"><canvas id="progressChart" width="400" height="200"></canvas></div>`;
+            } else {
+                html += `<p class="mt-4 text-gray-600">Complete more attempts to see your progress graph.</p>`;
+            }
+            
+            html += `</div>`;
+            resultArea.innerHTML = html;
+            
+            // Render chart
+            if (attempts.length > 0) {
+                const ctx = document.getElementById('progressChart').getContext('2d');
+                const labels = attempts.map((att, i) => `Attempt ${i+1}`);
+                const scores = attempts.map(att => att.score);
+                
+                // Destroy previous chart if exists
+                if (chartInstance) chartInstance.destroy();
+                
+                chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Score (%)',
+                            data: scores,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    afterLabel: (context) => {
+                                        const attempt = attempts[context.dataIndex];
+                                        return `Correct: ${attempt.correctAnswers}/${attempt.totalQuestions}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                title: { display: true, text: 'Score (%)' }
+                            },
+                            x: {
+                                title: { display: true, text: 'Attempt Number' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Event listeners
+        selectEl.addEventListener('change', (e) => loadDpp(e.target.value));
+        
+        // Initialize page
+        loadLectures();
+    </script>
+</body>
+</html>
