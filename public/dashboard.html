@@ -1,161 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard - My PW</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <style>
-    body { font-family: system-ui, sans-serif; }
-    .card-hover {
-      transition: all 0.3s;
-    }
-    .card-hover:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - My PW</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; }
+        .navbar { background: white; padding: 1rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: bold; color: #2563eb; }
+        .nav-links { display: flex; gap: 2rem; }
+        .nav-links a { text-decoration: none; color: #4b5563; font-weight: 500; }
+        .nav-links a:hover { color: #2563eb; }
+        .logout-btn { background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        .welcome-card { background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .subjects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1rem; }
+        .subject-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s; cursor: pointer; }
+        .subject-card:hover { transform: translateY(-4px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .subject-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .subject-name { font-size: 1.25rem; font-weight: 600; color: #1f2937; }
+        .progress-section { margin-top: 2rem; background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .error { color: #ef4444; padding: 1rem; }
+        .loading { color: #6b7280; padding: 1rem; }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-  <!-- Top Navbar -->
-  <nav class="bg-white shadow-md px-8 py-4 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <h1 class="text-3xl font-bold text-blue-600">My PW</h1>
-      <span class="text-gray-500 text-sm">Learn Like Physics Wallah</span>
-    </div>
-    <div class="flex items-center gap-6">
-      <div id="userInfo" class="text-right">
-        <p id="userName" class="font-semibold text-gray-800"></p>
-        <p id="userRole" class="text-xs text-gray-500"></p>
-      </div>
-      <button onclick="logout()"
-              class="px-5 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-2xl font-medium flex items-center gap-2">
-        <i class="fas fa-sign-out-alt"></i> Logout
-      </button>
-    </div>
-  </nav>
-
-  <div class="max-w-7xl mx-auto px-8 py-10">
-    <div id="welcome" class="mb-10">
-      <h2 class="text-4xl font-bold text-gray-800">Welcome back, <span id="welcomeName" class="text-blue-600"></span>! 👋</h2>
-      <p class="text-gray-600 mt-2">Continue your learning journey</p>
-    </div>
-
-    <!-- Quick Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-      <div class="bg-white rounded-3xl shadow-xl p-6 card-hover">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-gray-500 text-sm">Total Lectures</p>
-            <p id="totalLectures" class="text-4xl font-bold text-blue-600 mt-1">0</p>
-          </div>
-          <i class="fas fa-play-circle text-5xl text-blue-200"></i>
+<body>
+    <nav class="navbar">
+        <div class="logo">My PW</div>
+        <div class="nav-links">
+            <a href="dashboard.html">Dashboard</a>
+            <a href="subjects.html">Subjects</a>
+            <a href="/progress">Progress</a>
         </div>
-      </div>
-      <div class="bg-white rounded-3xl shadow-xl p-6 card-hover">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-gray-500 text-sm">Completed</p>
-            <p id="completedLectures" class="text-4xl font-bold text-green-600 mt-1">0</p>
-          </div>
-          <i class="fas fa-check-circle text-5xl text-green-200"></i>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
+    </nav>
+
+    <div class="container">
+        <div class="welcome-card">
+            <h1>Welcome back, <span id="userName">Student</span>!</h1>
+            <p>Continue your learning journey</p>
         </div>
-      </div>
-      <div class="bg-white rounded-3xl shadow-xl p-6 card-hover">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-gray-500 text-sm">Live Today</p>
-            <p id="liveClasses" class="text-4xl font-bold text-purple-600 mt-1">0</p>
-          </div>
-          <i class="fas fa-video text-5xl text-purple-200"></i>
+
+        <h2>Your Subjects</h2>
+        <div id="subjectsContainer" class="subjects-grid">
+            <div class="loading">Loading subjects...</div>
         </div>
-      </div>
+
+        <div class="progress-section">
+            <h3>Recent Progress</h3>
+            <div id="recentProgress">Loading...</div>
+        </div>
     </div>
 
-    <!-- Quick Navigation Cards - New Order -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <script>
+        const API_BASE = window.location.origin;
 
-      <!-- 1. Live Classes -->
-      <a href="live.html" class="bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center text-center card-hover">
-        <i class="fas fa-video text-6xl text-purple-600 mb-4"></i>
-        <h3 class="text-xl font-semibold">Live Classes</h3>
-        <p class="text-gray-500 mt-2">Join live sessions</p>
-      </a>
-
-      <!-- 2. Subjects -->
-      <a href="subjects.html" class="bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center text-center card-hover">
-        <i class="fas fa-book text-6xl text-blue-600 mb-4"></i>
-        <h3 class="text-xl font-semibold">Subjects</h3>
-        <p class="text-gray-500 mt-2">Banking • Quant • English • Reasoning</p>
-      </a>
-
-      <!-- 3. My Progress -->
-      <a href="progress.html" class="bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center text-center card-hover">
-        <i class="fas fa-chart-bar text-6xl text-green-600 mb-4"></i>
-        <h3 class="text-xl font-semibold">My Progress</h3>
-        <p class="text-gray-500 mt-2">Track your completion</p>
-      </a>
-
-      <!-- 4. Planner -->
-      <a href="planner.html" class="bg-white rounded-3xl shadow-xl p-8 flex flex-col items-center text-center card-hover">
-        <i class="fas fa-calendar-alt text-6xl text-indigo-600 mb-4"></i>
-        <h3 class="text-xl font-semibold">Planner</h3>
-        <p class="text-gray-500 mt-2">Study plan & schedule</p>
-      </a>
-
-    </div>
-  </div>
-
-  <script>
-    async function loadDashboard() {
-      try {
-        // Get user info
-        const userRes = await fetch('/api/me', { credentials: 'include' });
-        if (!userRes.ok) throw new Error();
-        const userData = await userRes.json();
-        if (!userData.success) {
-          window.location.href = 'login.html';
-          return;
+        // Check authentication
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_BASE}/api/me`, { credentials: 'include' });
+                const data = await res.json();
+                if (!data.success) {
+                    window.location.href = '/';
+                    return null;
+                }
+                return data.user;
+            } catch (err) {
+                window.location.href = '/';
+                return null;
+            }
         }
 
-        document.getElementById('userName').textContent = userData.user.name || 'Student';
-        document.getElementById('userRole').textContent = userData.user.role === 'admin' ? 'Admin' : 'Student';
-        document.getElementById('welcomeName').textContent = (userData.user.name || 'Student').split(' ')[0];
+        // Fetch subjects
+        async function loadSubjects() {
+            const container = document.getElementById('subjectsContainer');
+            try {
+                const res = await fetch(`${API_BASE}/api/subjects`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.success && data.subjects.length > 0) {
+                    container.innerHTML = data.subjects.map(sub => `
+                        <div class="subject-card" onclick="window.location.href='lectures.html?subjectId=${sub._id}'">
+                            <div class="subject-icon">${sub.icon || '📚'}</div>
+                            <div class="subject-name">${sub.name}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p>No subjects available yet.</p>';
+                }
+            } catch (err) {
+                container.innerHTML = '<p class="error">Failed to load subjects.</p>';
+            }
+        }
 
-        // Real Stats
-        const lecturesRes = await fetch('/api/lectures', { credentials: 'include' });
-        const lectures = await lecturesRes.json();
-        const total = lectures.length;
-        const completed = lectures.filter(l => l.completed === true).length;
+        // Fetch recent progress (last 3 DPP results)
+        async function loadRecentProgress() {
+            const container = document.getElementById('recentProgress');
+            try {
+                const res = await fetch(`${API_BASE}/api/me`, { credentials: 'include' });
+                const userData = await res.json();
+                if (!userData.success) return;
 
-        document.getElementById('totalLectures').textContent = total;
-        document.getElementById('completedLectures').textContent = completed;
+                // For recent DPP results we can use the progress API (or fetch from /progress endpoint)
+                // Since we need the data here, we'll call a simple endpoint; we don't have a dedicated one,
+                // so we can either create one or just show a link. For simplicity, show link to full progress.
+                container.innerHTML = `<p>View your detailed progress on the <a href="/progress">Progress Page</a>.</p>`;
+            } catch (err) {
+                container.innerHTML = '<p class="error">Could not load progress.</p>';
+            }
+        }
 
-        // Live Today Count
-        const today = new Date().toISOString().split('T')[0];
-        const liveRes = await fetch(`/api/live/today?date=${today}`, { credentials: 'include' });
-        const liveData = await liveRes.json();
-        const liveToday = Array.isArray(liveData) ? liveData.length : 0;
-        document.getElementById('liveClasses').textContent = liveToday;
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await fetch(`${API_BASE}/api/logout`, { method: 'POST', credentials: 'include' });
+            window.location.href = '/';
+        });
 
-      } catch (err) {
-        console.error(err);
-        document.getElementById('totalLectures').textContent = '0';
-        document.getElementById('completedLectures').textContent = '0';
-        document.getElementById('liveClasses').textContent = '0';
-      }
-    }
-
-    async function logout() {
-      if (!confirm("Are you sure you want to logout?")) return;
-      try {
-        await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-      } catch (e) {}
-      window.location.href = 'login.html';
-    }
-
-    window.onload = loadDashboard;
-  </script>
+        // Initialize
+        (async () => {
+            const user = await checkAuth();
+            if (user) {
+                document.getElementById('userName').textContent = user.name;
+                loadSubjects();
+                loadRecentProgress();
+            }
+        })();
+    </script>
 </body>
 </html>
