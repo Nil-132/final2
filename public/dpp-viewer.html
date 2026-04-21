@@ -543,10 +543,15 @@
                 const data = await res.json();
                 if (data.success && data.user) {
                     userId = data.user.id || data.user._id;
+                    console.log('User ID set:', userId);
+                } else {
+                    console.warn('User data missing in response:', data);
                 }
+            } else {
+                console.error('Failed to fetch user:', res.status);
             }
         } catch (e) {
-            console.warn('Could not fetch user ID');
+            console.error('Error fetching user:', e);
         }
     }
 
@@ -757,7 +762,7 @@
 
     async function finalSubmit() {
         if (!userId) {
-            alert('You must be logged in to submit.');
+            alert('You must be logged in to submit. Please log in again.');
             window.location.href = '/login.html';
             return;
         }
