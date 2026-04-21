@@ -233,33 +233,31 @@
     }
 
     // Filter lectures by subject
-    document.getElementById('quick-subject-select').addEventListener('change', (e) => {
-        const subjectId = e.target.value;
-        const lectureSelect = document.getElementById('quick-lecture-select');
-        lectureSelect.innerHTML = '<option value="">-- Select a lecture --</option>';
-        lectureSelect.disabled = !subjectId;
+    // Filter lectures by subject
+document.getElementById('quick-subject-select').addEventListener('change', (e) => {
+    const subjectId = e.target.value;
+    const lectureSelect = document.getElementById('quick-lecture-select');
+    lectureSelect.innerHTML = '<option value="">-- Select a lecture --</option>';
+    lectureSelect.disabled = !subjectId;
+    
+    if (subjectId) {
+        const filtered = allLectures.filter(l => String(l.subjectId) === String(subjectId));
+        filtered.forEach(lec => {
+            const opt = document.createElement('option');
+            opt.value = lec._id;
+            opt.textContent = lec.title;
+            lectureSelect.appendChild(opt);
+        });
         
-        if (subjectId) {
-            // Filter lectures that belong to this subject
-            const filtered = allLectures.filter(l => l.subjectId === subjectId || l.subject?._id === subjectId);
-            console.log(`Filtered lectures for subject ${subjectId}:`, filtered.length);
-            
-            filtered.forEach(lec => {
-                const opt = document.createElement('option');
-                opt.value = lec._id;
-                opt.textContent = lec.title;
-                lectureSelect.appendChild(opt);
-            });
-            
-            if (filtered.length === 0) {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = 'No lectures found for this subject';
-                opt.disabled = true;
-                lectureSelect.appendChild(opt);
-            }
+        if (filtered.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'No lectures found for this subject';
+            opt.disabled = true;
+            lectureSelect.appendChild(opt);
         }
-    });
+    }
+});
 
     // ========== QUICK UPLOAD ==========
     function setupQuickUpload() {
