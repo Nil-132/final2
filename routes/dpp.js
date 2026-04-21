@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const Dpp = require('../models/Dpp');
 const DppResult = require('../models/DppResult');
+const Lecture = require('../models/Lecture'); // NEW: Import Lecture model
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-me';
 
@@ -43,19 +44,52 @@ router.get('/:lectureId', async (req, res) => {
   }
 });
 
-// @desc    Upload/update a DPP via JSON (used by management UI)
+// @desc    Upload/update a DPP via JSON (with auto lectureId lookup)
 // @route   POST /api/dpp/upload
 router.post('/upload', async (req, res) => {
   try {
     const dppData = req.body;
-    if (!dppData.lectureId || !dppData.lectureName || !Array.isArray(dppData.questions)) {
-      return res.status(400).json({ error: 'Invalid DPP format' });
+
+    // Validate required fields
+    if (!dppData.lectureName || !Array.isArray(dppData.questions)) {
+      return res.status(400).json({ error: 'lectureName and questions array are required' });
     }
+
+    // If lectureId is not provided, try to find it by lectureName
+    if (!dppData.lectureId) {
+      // Search for a lecture with matching name (case-insensitive)
+      const lecture = await Lecture.findOne({ 
+        title: { $regex: new RegExp('^' + dppData.lectureName + '$', 'i') } 
+      });
+
+      if (!lecture) {
+        return res.status(400).json({ 
+          error: `No lecture found with name "${dppData.lectureName}". Please create the lecture first or provide a lectureId.` 
+        });
+      }
+
+      dppData.lectureId = lecture._id.toString();
+      console.log(`Auto-mapped lectureName "${dppData.lectureName}" to ID ${dppData.lectureId}`);
+    }
+
+    // Optional: verify the lectureId actually exists in Lecture collection
+    const lectureExists = await Lecture.findById(dppData.lectureId);
+    if (!lectureExists) {
+      return res.status(400).json({ error: `Lecture with ID ${dppData.lectureId} not found` });
+    }
+
+    // Use the lecture's title if lectureName wasn't provided or to keep consistent
+    if (!dppData.lectureName) {
+      dppData.lectureName = lectureExists.title;
+    }
+
+    // Upsert DPP
     const dpp = await Dpp.findOneAndUpdate(
       { lectureId: dppData.lectureId },
       dppData,
       { upsert: true, new: true, runValidators: true }
     );
+
     res.json({ success: true, dpp });
   } catch (error) {
     console.error('Error uploading DPP:', error);
