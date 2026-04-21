@@ -126,7 +126,6 @@
 
         let html = '';
         for (let sub of subjects) {
-          // Use the actual MongoDB _id as subjectId
           const subjectId = sub._id || sub.id;
           
           let total = 0, completed = 0;
