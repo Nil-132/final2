@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DPP Practice</title>
-    <!-- Font Awesome & Chart.js -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -354,7 +353,6 @@
             color: var(--pw-dark-blue);
         }
 
-        /* Lecture selector styles */
         #lecture-selector-section {
             position: fixed;
             top: 70px;
@@ -429,7 +427,7 @@
     </div>
 </div>
 
-<!-- Lecture Selector Dropdown (floating) -->
+<!-- Lecture Selector Dropdown -->
 <div id="lecture-selector-section">
     <div class="flex justify-between items-center mb-3">
         <h3 class="font-semibold text-gray-700">Select Lecture</h3>
@@ -487,7 +485,6 @@
             <div class="analysis-card"><span>ACCURACY</span><span class="analysis-val" id="res-acc">0%</span></div>
             <div class="analysis-card"><span>TIME</span><span class="analysis-val" id="res-time">00:00:00</span></div>
         </div>
-        <!-- Progress Graph -->
         <div class="card mt-4">
             <h3 style="margin-top:0;">Progress Trend</h3>
             <canvas id="progressChart" width="400" height="200"></canvas>
@@ -497,11 +494,11 @@
 
 <script>
     // ---------- GLOBAL STATE ----------
-    let questions = [];                // loaded from API
-    let currentDpp = null;             // full DPP object
+    let questions = [];
+    let currentDpp = null;
     let current = 0;
-    let userAnswers = [];              // array of selected option indices
-    let states = [];                   // 'unanswered' or 'checked'
+    let userAnswers = [];
+    let states = [];
     let timers = [];
     let timerInterval;
     let userId = null;
@@ -511,7 +508,6 @@
     let testStartTime = Date.now();
     let totalTestSeconds = 0;
 
-    // DOM elements
     const testInterface = document.getElementById('test-interface');
     const resultPage = document.getElementById('result-page');
     const lectureSelector = document.getElementById('lecture-selector-section');
@@ -519,7 +515,7 @@
     const changeLectureBtn = document.getElementById('change-lecture-btn');
     const currentLectureBadge = document.getElementById('current-lecture-badge');
 
-    // ---------- INITIALIZATION ----------
+    // ---------- INIT ----------
     (async function init() {
         await fetchUser();
         await loadAllLectures();
@@ -532,7 +528,6 @@
             changeLectureBtn.style.display = 'inline-block';
             await loadDpp(currentLectureId);
         } else {
-            // Show lecture selector
             showLectureSelector();
         }
     })();
@@ -570,50 +565,42 @@
     async function loadDpp(lectureId) {
         if (!lectureId) return;
 
-        // Show loading
         document.getElementById('q-text').innerText = 'Loading questions...';
         document.getElementById('options').innerHTML = '';
 
         try {
             const res = await fetch(`/api/dpp/${lectureId}`);
             if (!res.ok) {
-                if (res.status === 404) {
-                    alert('No DPP found for this lecture.');
-                    showLectureSelector();
-                }
+                if (res.status === 404) alert('No DPP found for this lecture.');
                 throw new Error('Failed to load DPP');
             }
             const dpp = await res.json();
             currentDpp = dpp;
             currentLectureId = dpp.lectureId;
 
-            // Transform questions to match the PW format
             questions = dpp.questions.map((q, idx) => ({
                 id: q.id,
                 text: q.questionText,
                 options: q.options,
                 ans: q.correctAnswer,
-                diff: q.type === 'multiple-choice' ? 'MEDIUM' : 'EASY', // you can add difficulty to DPP model later
-                date: ''
+                diff: q.difficulty || 'MEDIUM',
+                date: q.date || ''
             }));
 
-            // Initialize state
             userAnswers = new Array(questions.length).fill(null);
             states = new Array(questions.length).fill('unanswered');
             timers = new Array(questions.length).fill(0);
             current = 0;
 
-            // Update UI
             currentLectureBadge.textContent = dpp.lectureName;
             lectureSelector.classList.remove('show');
             changeLectureBtn.style.display = 'inline-block';
 
-            // Render first question
             renderQuestion();
             updatePalette();
             startTimer();
+            testStartTime = Date.now();
 
-            // Hide loading message if any
             document.getElementById('q-area').style.display = 'flex';
         } catch (error) {
             console.error('Error loading DPP:', error);
@@ -621,12 +608,12 @@
         }
     }
 
-    // ---------- RENDERING ----------
     function renderQuestion() {
         if (!questions.length) return;
         const q = questions[current];
         document.getElementById('q-num-box').innerText = current + 1;
         document.getElementById('q-text').innerText = q.text;
+        document.getElementById('date-badge').innerText = q.date ? `PYQ ${q.date}` : '';
         const label = document.getElementById('difficulty-label');
         label.innerText = q.diff;
         label.style.color = q.diff === 'HARD' ? 'var(--diff-hard)' : (q.diff === 'EASY' ? 'var(--diff-easy)' : 'var(--diff-medium)');
@@ -654,7 +641,6 @@
             optDiv.appendChild(div);
         });
 
-        // Enable/disable nav buttons
         document.getElementById('prev-btn').disabled = (current === 0);
         document.getElementById('next-btn').disabled = (current === questions.length - 1);
     }
@@ -721,7 +707,6 @@
         btn.innerText = isCollapsed ? '❮' : '❯';
     }
 
-    // ---------- LECTURE SELECTOR ----------
     function showLectureSelector() {
         lectureSelector.classList.add('show');
         testInterface.style.opacity = '0.5';
@@ -740,7 +725,6 @@
             currentLectureId = newId;
             hideLectureSelector();
             loadDpp(newId);
-            // Update URL without reload
             const newUrl = new URL(window.location);
             newUrl.searchParams.set('lectureId', newId);
             window.history.pushState({}, '', newUrl);
@@ -752,7 +736,6 @@
         lectureSelect.value = currentLectureId || '';
     });
 
-    // ---------- SUBMIT MODAL ----------
     function showSubmitModal() {
         document.getElementById('m-total').innerText = questions.length;
         document.getElementById('m-correct').innerText = document.getElementById('count-correct').innerText;
@@ -771,10 +754,8 @@
             return;
         }
 
-        // Calculate total time
         totalTestSeconds = Math.floor((Date.now() - testStartTime) / 1000);
 
-        // Prepare answers for API
         const answers = questions.map((q, i) => ({
             questionId: q.id,
             selectedOption: userAnswers[i] !== null ? userAnswers[i] : -1,
@@ -819,8 +800,6 @@
 
         const correct = result.correctCount;
         const total = result.totalQuestions;
-        const incorrect = result.totalQuestions - correct - (total - (correct + (total - correct))); // simplified: incorrect = total - correct - unanswered
-        // Actually we can compute from answers but easier:
         let inc = 0, unatt = 0;
         states.forEach((s, i) => {
             if (s === 'checked') {
@@ -844,7 +823,6 @@
         let h = Math.floor(totalTestSeconds / 3600), m = Math.floor((totalTestSeconds % 3600) / 60), s = totalTestSeconds % 60;
         document.getElementById('res-time').innerText = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 
-        // Load progress graph
         loadProgressGraph(currentDpp.lectureId);
     }
 
@@ -886,14 +864,13 @@
     }
 
     function reattemptDpp() {
-        // Reset everything and reload same DPP
         resultPage.style.display = 'none';
         testInterface.style.display = 'flex';
         loadDpp(currentLectureId);
         testStartTime = Date.now();
     }
 
-    // Expose functions for inline onclick
+    // Expose global functions
     window.toggleSidebar = toggleSidebar;
     window.nav = nav;
     window.showSubmitModal = showSubmitModal;
