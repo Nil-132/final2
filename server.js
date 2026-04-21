@@ -74,7 +74,7 @@ app.post('/api/send-otp', async (req, res) => {
         await Otp.findOneAndUpdate(
             { email },
             { otp, expiresAt: new Date(Date.now() + 10 * 60 * 1000) },
-                                   { upsert: true, new: true }
+            { upsert: true, new: true }
         );
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
@@ -105,9 +105,9 @@ app.post('/api/verify-otp', async (req, res) => {
 // Signup (with OTP check)
 app.post('/api/signup', [
     body('name').trim().notEmpty(),
-         body('email').isEmail().normalizeEmail(),
-         body('password').isLength({ min: 6 }),
-         body('otp').notEmpty()
+    body('email').isEmail().normalizeEmail(),
+    body('password').isLength({ min: 6 }),
+    body('otp').notEmpty()
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
@@ -208,29 +208,42 @@ app.delete('/api/chapters/:id', authenticate, isAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
-// ---------- LECTURES ----------
+// ---------- LECTURES (UPDATED FOR ROBUST DPP DETECTION) ----------
 app.get('/api/lectures', authenticate, async (req, res) => {
-    const { subjectId, chapterId } = req.query;
-    let query = {};
-    if (subjectId) query.subjectId = subjectId;
-    if (chapterId) query.chapterId = chapterId;
-    const lectures = await Lecture.find(query).sort('createdAt');
+    try {
+        const { subjectId, chapterId } = req.query;
+        let query = {};
+        if (subjectId) query.subjectId = subjectId;
+        if (chapterId) query.chapterId = chapterId;
+        const lectures = await Lecture.find(query).sort('createdAt');
 
-    // Get all lecture IDs as strings for DPP lookup
-    const lectureIds = lectures.map(l => l._id.toString());
-    // Find which lectures have a DPP
-    const dpps = await Dpp.find({ lectureId: { $in: lectureIds } }, 'lectureId');
-    const dppSet = new Set(dpps.map(d => d.lectureId));
+        // Prepare arrays of lecture IDs for matching (both ObjectId and string)
+        const lectureObjectIds = lectures.map(l => l._id);
+        const lectureIdStrings = lectures.map(l => l._id.toString());
 
-    // Attach completion status and hasDpp flag
-    const progress = await Progress.find({ user: req.user.id, lecture: { $in: lectures.map(l => l._id) } });
-    const completedIds = new Set(progress.map(p => p.lecture.toString()));
-    const enriched = lectures.map(l => ({
-        ...l.toObject(),
-                                        completed: completedIds.has(l._id.toString()),
-                                        hasDpp: dppSet.has(l._id.toString())   // true if a DPP exists for this lecture
-    }));
-    res.json(enriched);
+        // Find DPPs where lectureId matches either ObjectId or string
+        const dpps = await Dpp.find({
+            $or: [
+                { lectureId: { $in: lectureObjectIds } },
+                { lectureId: { $in: lectureIdStrings } }
+            ]
+        });
+        const dppSet = new Set(dpps.map(d => d.lectureId.toString()));
+
+        // Attach completion status
+        const progress = await Progress.find({ user: req.user.id, lecture: { $in: lectureObjectIds } });
+        const completedIds = new Set(progress.map(p => p.lecture.toString()));
+
+        const enriched = lectures.map(l => ({
+            ...l.toObject(),
+            completed: completedIds.has(l._id.toString()),
+            hasDpp: dppSet.has(l._id.toString())
+        }));
+        res.json(enriched);
+    } catch (error) {
+        console.error('Error in /api/lectures:', error);
+        res.status(500).json([]);
+    }
 });
 
 app.get('/api/lectures/:id', authenticate, async (req, res) => {
@@ -267,7 +280,7 @@ app.post('/api/lectures/:id/complete', authenticate, async (req, res) => {
     await Progress.findOneAndUpdate(
         { user: req.user.id, lecture: req.params.id },
         { completed: true, completedAt: new Date() },
-                                    { upsert: true }
+        { upsert: true }
     );
     res.json({ success: true });
 });
@@ -321,6 +334,8 @@ app.post('/api/dpp/upload', authenticate, isAdmin, async (req, res) => {
             date: q.date || ''
         }));
         dppData.questions = normalized;
+        // Ensure lectureId is stored as string for consistency
+        dppData.lectureId = dppData.lectureId.toString();
         const dpp = await Dpp.findOneAndUpdate(
             { lectureId: dppData.lectureId },
             dppData,
@@ -342,7 +357,6 @@ app.put('/api/dpp/:lectureId', authenticate, isAdmin, async (req, res) => {
             return res.status(400).json({ error: 'questions array required' });
         }
 
-        // Normalize questions to match schema
         const normalizedQuestions = questions.map((q, i) => ({
             id: q.id || `q${i+1}`,
             type: q.type || 'multiple-choice',
@@ -354,7 +368,6 @@ app.put('/api/dpp/:lectureId', authenticate, isAdmin, async (req, res) => {
             date: q.date || ''
         }));
 
-        // Find the DPP by lectureId and update questions
         const dpp = await Dpp.findOne({ lectureId });
         if (!dpp) {
             return res.status(404).json({ error: 'DPP not found' });
@@ -403,7 +416,6 @@ app.delete('/api/dpp/:lectureId', authenticate, isAdmin, async (req, res) => {
         if (!dpp) {
             return res.status(404).json({ error: 'DPP not found' });
         }
-        // Also delete all results for this DPP
         await DppResult.deleteMany({ lectureId });
         res.json({ success: true, message: 'DPP and associated results deleted' });
     } catch (error) {
@@ -416,8 +428,6 @@ app.get('/api/dpp/analytics/:lectureId', authenticate, async (req, res) => {
     const results = await DppResult.find({ userId: req.user.id, lectureId: req.params.lectureId }).sort('submittedAt');
     res.json({ attempts: results });
 });
-
-
 
 // ---------- FORGOT / RESET PASSWORD ----------
 app.post('/api/forgot-password', async (req, res) => {
