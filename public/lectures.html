@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <style>
-    /* All existing styles (unchanged - keep your current CSS) */
+    /* All existing styles unchanged */
     body { font-family: system-ui, -apple-system, sans-serif; }
     .chapter-item:hover { background-color: #f8fafc; }
     .active-chapter {
@@ -320,7 +320,7 @@
   </div>
 </div>
 
-<!-- Manage Modal -->
+<!-- Manage Modal (unchanged) -->
 <div id="manage-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50">
   <div class="bg-white rounded-3xl p-8 w-full max-w-lg mx-4 modal-content">
     <h2 class="text-2xl font-semibold mb-6">Manage Content</h2>
@@ -379,11 +379,10 @@
   </div>
 </div>
 
-<!-- Advanced Video Player Modal - with fresh iframe recreation -->
+<!-- Advanced Video Player Modal (unchanged) -->
 <div id="videoPlayerModal" class="hidden fixed inset-0 video-modal-overlay flex items-center justify-center p-2 md:p-4 z-[300]">
   <div class="player-card w-full max-w-5xl">
     <div class="video-stage relative" id="videoStageContainer">
-      <!-- iframe will be dynamically created here -->
       <div id="videoOverlay" class="absolute inset-0 z-20 cursor-pointer"></div>
       <div id="centerPlayIcon" class="center-play-icon"><i class="fas fa-play"></i></div>
       <div id="messagePanel" class="absolute inset-0 bg-black/80 backdrop-blur-xl z-40 flex items-center justify-center flex-col gap-4 text-white hidden">
@@ -468,6 +467,7 @@ let isAdmin = false;
 let allLectures = [];
 let currentPdfLink = '';
 let currentDppLink = '';
+let currentLectureId = '';  // NEW: store lecture ID for dynamic DPP
 
 async function checkAuth() {
   try {
@@ -537,21 +537,44 @@ function renderLectures(lectures) {
           </div>
           <div class="flex gap-3 mt-5">
             <button onclick="playVideo('${lec.youtubeId || ''}')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-play"></i> Watch</button>
-            <button onclick="showNotesModal('${lec.pdfLink || ''}', '${lec.dppLink || ''}')" class="flex-1 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-book-open"></i> Notes & More</button>
+            <button onclick="showNotesModal('${lec.pdfLink || ''}', '${lec.dppLink || ''}', '${lec._id}')" class="flex-1 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-book-open"></i> Notes & More</button>
           </div>
         </div>
       </div>`;
   });
   container.innerHTML = html;
 }
-function showNotesModal(pdfLink, dppLink) {
-  currentPdfLink = pdfLink; currentDppLink = dppLink;
-  if (!pdfLink && !dppLink) { showToast("Notes and DPP will be added soon for this lecture!", "info"); return; }
+function showNotesModal(pdfLink, dppLink, lectureId) {
+  currentPdfLink = pdfLink; 
+  currentDppLink = dppLink; 
+  currentLectureId = lectureId;  // Store for DPP
+  if (!pdfLink && !dppLink) { 
+    // Even if no DPP link, we still might have a dynamic DPP by lectureId
+    if (lectureId) {
+      // We can still open dynamic DPP
+    } else {
+      showToast("Notes and DPP will be added soon for this lecture!", "info"); 
+    }
+  }
   document.getElementById('notes-modal').classList.remove('hidden');
 }
 function hideNotesModal() { document.getElementById('notes-modal').classList.add('hidden'); }
-function openPdf() { if (currentPdfLink) window.open(currentPdfLink, '_blank'); hideNotesModal(); }
-function openDpp() { if (currentDppLink) window.open(currentDppLink, '_blank'); hideNotesModal(); }
+function openPdf() { 
+  if (currentPdfLink) window.open(currentPdfLink, '_blank'); 
+  hideNotesModal(); 
+}
+function openDpp() { 
+  if (currentLectureId) {
+    // Open dynamic DPP viewer with lecture ID
+    window.location.href = `/dpp-viewer.html?lectureId=${currentLectureId}`;
+  } else if (currentDppLink) {
+    // Fallback to static link if no lecture ID
+    window.open(currentDppLink, '_blank');
+  } else {
+    showToast("No DPP available for this lecture.", "info");
+  }
+  hideNotesModal(); 
+}
 function applyFilters() {
   const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
   const filterType = document.getElementById('filter-select').value;
@@ -580,7 +603,7 @@ function selectChapter(chapterId) {
   if (window.innerWidth < 768) toggleSidebar();
 }
 
-// ========== ADVANCED VIDEO PLAYER - FIXED FOR MULTIPLE VIDEOS ==========
+// ========== ADVANCED VIDEO PLAYER (unchanged) ==========
 let player = null;
 let playerReady = false;
 let currentVideoId = null;
@@ -648,7 +671,6 @@ function bindControlEvents() {
   }
 }
 
-// Completely destroy and remove the iframe
 function destroyPlayer() {
   if (progressInterval) {
     clearInterval(progressInterval);
@@ -662,15 +684,11 @@ function destroyPlayer() {
     player = null;
   }
   playerReady = false;
-  // Remove existing iframe
   const existingIframe = document.getElementById('youtubeIframe');
-  if (existingIframe) {
-    existingIframe.remove();
-  }
+  if (existingIframe) existingIframe.remove();
   isCreatingPlayer = false;
 }
 
-// Create a fresh iframe element
 function createFreshIframe() {
   const iframe = document.createElement('iframe');
   iframe.id = 'youtubeIframe';
@@ -692,14 +710,10 @@ function loadYouTubeAPI() {
 }
 
 function createPlayer(videoId) {
-  if (isCreatingPlayer) {
-    console.log('Already creating player, skipping');
-    return;
-  }
+  if (isCreatingPlayer) return;
   isCreatingPlayer = true;
-  destroyPlayer(); // clean up old player and iframe
+  destroyPlayer();
   
-  // Create and append new iframe
   const newIframe = createFreshIframe();
   videoStageContainer.insertBefore(newIframe, videoStageContainer.firstChild);
   
@@ -894,7 +908,6 @@ function closeVideoModal() {
   modal.classList.add('hidden');
   if (controlsHideTimeout) clearTimeout(controlsHideTimeout);
   document.body.style.overflow = '';
-  // Remove any leftover iframe from the container
   const leftoverIframe = document.getElementById('youtubeIframe');
   if (leftoverIframe) leftoverIframe.remove();
 }
@@ -937,7 +950,6 @@ function handleVideoKeys(e) {
   }
 }
 
-// Event listeners
 playPauseBtn.addEventListener('click', () => {
   if (player && playerReady) {
     (player.getPlayerState() === YT.PlayerState.PLAYING) ? player.pauseVideo() : player.playVideo();
@@ -971,9 +983,7 @@ function playVideo(videoId) {
     showToast("No YouTube video ID added yet.", "error");
     return;
   }
-  // Always close existing modal completely and recreate everything
   closeVideoModal();
-  // Small delay to ensure DOM cleanup
   setTimeout(() => {
     currentVideoId = videoId;
     modal.classList.remove('hidden');
@@ -1102,4 +1112,4 @@ async function executeManageAction() {
 window.onload = async () => { await checkAuth(); await loadData(); };
 </script>
 </body>
-  </html>
+</html>
