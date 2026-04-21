@@ -547,15 +547,11 @@ function renderLectures(lectures) {
 function showNotesModal(pdfLink, dppLink, lectureId) {
   currentPdfLink = pdfLink; 
   currentDppLink = dppLink; 
-  currentLectureId = lectureId;  // Store for DPP
-  if (!pdfLink && !dppLink) { 
-    // Even if no DPP link, we still might have a dynamic DPP by lectureId
-    if (lectureId) {
-      // We can still open dynamic DPP
-    } else {
-      showToast("Notes and DPP will be added soon for this lecture!", "info"); 
-    }
-  }
+  currentLectureId = lectureId;
+  
+  // Always show the modal – even if links are missing, because DPP might be dynamically added later.
+  document.getElementById('notes-modal').classList.remove('hidden');
+}
   document.getElementById('notes-modal').classList.remove('hidden');
 }
 function hideNotesModal() { document.getElementById('notes-modal').classList.add('hidden'); }
@@ -565,13 +561,13 @@ function openPdf() {
 }
 function openDpp() { 
   if (currentLectureId) {
-    // Open dynamic DPP viewer with lecture ID
+    // Open dynamic DPP viewer with lecture ID (handles missing DPP gracefully)
     window.location.href = `/dpp-viewer.html?lectureId=${currentLectureId}`;
   } else if (currentDppLink) {
-    // Fallback to static link if no lecture ID
+    // Fallback to static link if no lecture ID (should not happen)
     window.open(currentDppLink, '_blank');
   } else {
-    showToast("No DPP available for this lecture.", "info");
+    showToast("No DPP available for this lecture yet.", "info");
   }
   hideNotesModal(); 
 }
