@@ -4,408 +4,904 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DPP Practice</title>
+    <!-- Font Awesome & Chart.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        .correct-answer { background-color: #d1fae5; }
-        .incorrect-answer { background-color: #fee2e2; }
+        :root {
+            --pw-blue: #0087fd;
+            --pw-dark-blue: #232a58;
+            --bg-gray: #f7f8fc;
+            --diff-easy: #2fb138;
+            --diff-medium: #aa7722;
+            --diff-hard: #d93025;
+            --status-green: #2fb138;
+            --status-red: #ea5033;
+            --status-na: #6c757d;
+            --status-bg-box: #e9ecf5;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: var(--bg-gray);
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #test-interface {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background: white;
+            padding: 0 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            height: 60px;
+            z-index: 100;
+        }
+
+        #timer-box {
+            font-size: 0.95rem;
+            color: #444;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+
+        #timer-box::before {
+            content: '\23F1';
+            margin-right: 6px;
+            font-size: 1.1rem;
+        }
+
+        .pw-btn-style {
+            background: white;
+            color: var(--pw-blue);
+            border: 1.5px solid var(--pw-blue);
+            padding: 8px 22px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .pw-btn-style:hover {
+            background: #e8f0fe;
+        }
+
+        #main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #q-area {
+            flex: 1;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            margin: 15px;
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+            overflow-y: auto;
+            transition: margin 0.3s ease;
+        }
+
+        #sidebar-container {
+            display: flex;
+            position: relative;
+            transition: width 0.3s ease;
+        }
+
+        #right-sidebar {
+            width: 340px;
+            background: #fff;
+            border-left: 1px solid #ddd;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease, width 0.3s ease;
+            overflow-x: hidden;
+        }
+
+        #sidebar-toggle {
+            position: absolute;
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 48px;
+            background: #eff4ff;
+            color: var(--pw-dark-blue);
+            border: 1px solid #ccd5f0;
+            border-radius: 8px 0 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 50;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.05);
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        #sidebar-container.collapsed #right-sidebar {
+            width: 0;
+            padding: 0;
+            transform: translateX(100%);
+            border-left: none;
+        }
+
+        #sidebar-container.collapsed #sidebar-toggle {
+            border-radius: 8px;
+            left: -30px;
+        }
+
+        @media (max-width: 768px) {
+            #right-sidebar { width: 260px; }
+            header { padding: 0 15px; }
+            #q-area { margin: 10px; padding: 15px; }
+            .pal-grid { grid-template-columns: repeat(4, 1fr) !important; }
+        }
+
+        #q-num-box {
+            background: #eff1f5;
+            color: var(--pw-dark-blue);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-right: 12px;
+        }
+
+        #date-badge {
+            font-size: 0.75rem;
+            color: #666;
+            background: #f0f0f0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 10px;
+            font-weight: normal;
+        }
+
+        .option {
+            border: 1px solid #dee2e6;
+            padding: 14px;
+            margin: 10px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .correct {
+            border-color: var(--status-green) !important;
+            background: #f1fff2 !important;
+            border-width: 2px !important;
+        }
+
+        .wrong {
+            border-color: var(--status-red) !important;
+            background: #fff1f1 !important;
+            border-width: 2px !important;
+        }
+
+        #summary-card {
+            background: var(--status-bg-box);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+
+        .stat-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 15px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #444;
+        }
+
+        .stat-count {
+            width: 32px;
+            height: 26px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .pal-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+        }
+
+        .pal-btn {
+            aspect-ratio: 1.1;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background: #f8f9fa;
+            cursor: pointer;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .pal-btn.active {
+            border: 2.5px solid var(--pw-blue);
+            background: #fff;
+        }
+
+        .res-correct {
+            border: 1.5px solid var(--status-green) !important;
+            color: var(--status-green) !important;
+            background: #f1fff2;
+        }
+
+        .res-wrong {
+            border: 1.5px solid var(--status-red) !important;
+            color: var(--status-red) !important;
+            background: #fff1f1;
+        }
+
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #submit-modal {
+            background: white;
+            width: 90%;
+            max-width: 420px;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .modal-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        #modal-stats-box {
+            background: #f8f9fc;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+            border: 1px solid #eee;
+        }
+
+        .modal-stat-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        #result-page {
+            display: none;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow-y: auto;
+            background: var(--bg-gray);
+        }
+
+        .result-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+        }
+
+        .score-display {
+            text-align: center;
+        }
+
+        .score-big {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: var(--pw-blue);
+            margin: 10px 0;
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .analysis-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #eee;
+            text-align: center;
+        }
+
+        .analysis-val {
+            font-size: 1.3rem;
+            font-weight: bold;
+            display: block;
+            margin-top: 5px;
+            color: var(--pw-dark-blue);
+        }
+
+        /* Lecture selector styles */
+        #lecture-selector-section {
+            position: fixed;
+            top: 70px;
+            left: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 15px;
+            z-index: 200;
+            min-width: 250px;
+            display: none;
+        }
+
+        #lecture-selector-section.show {
+            display: block;
+        }
+
+        #current-lecture-badge {
+            background: #e8f0fe;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: var(--pw-blue);
+            margin-left: 15px;
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="max-w-4xl mx-auto py-8 px-4">
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">
-                <i class="fas fa-pencil-alt mr-2 text-blue-600"></i>Daily Practice Problems
-            </h1>
-            <a href="/dashboard.html" class="text-blue-600 hover:underline">&larr; Back to Dashboard</a>
+<body>
+
+<div id="test-interface">
+    <header>
+        <div style="display: flex; align-items: center;">
+            <button class="pw-btn-style" onclick="window.location.href='/dashboard.html'">
+                <i class="fas fa-arrow-left mr-2"></i>Back
+            </button>
+            <span id="current-lecture-badge"></span>
+            <button id="change-lecture-btn" class="pw-btn-style ml-3 text-sm" style="display: none;">
+                <i class="fas fa-exchange-alt mr-1"></i>Change Lecture
+            </button>
         </div>
-        
-        <!-- Lecture Selection (hidden by default when lectureId is in URL) -->
-        <div id="lecture-selection-section" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
-            <div class="flex items-center justify-between mb-3">
-                <label class="block text-gray-700 font-medium">Select Lecture:</label>
-                <button id="close-selector-btn" class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times"></i>
-                </button>
+        <div id="timer-box"><span id="timer-display">00:00:00</span></div>
+        <button class="pw-btn-style" onclick="showSubmitModal()">Submit DPP</button>
+    </header>
+
+    <div id="main">
+        <div id="q-area">
+            <div id="q-header" style="display:flex; align-items:center; margin-bottom:15px;">
+                <div id="q-num-box">1</div>
+                <div id="difficulty-label" style="font-weight:bold;">MEDIUM</div>
+                <div id="date-badge"></div>
             </div>
-            <select id="lecture-select" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="">-- Choose a lecture --</option>
-            </select>
+            <div id="q-text" style="font-size:1.05rem; line-height:1.6; margin-bottom:20px; white-space:pre-wrap; color:#222;">Loading questions...</div>
+            <div id="options"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto; padding-top:15px; border-top:1px solid #eee;">
+                <button class="pw-btn-style" id="prev-btn" onclick="nav(-1)">Previous</button>
+                <button class="pw-btn-style" id="next-btn" onclick="nav(1)">Next</button>
+            </div>
         </div>
-        
-        <!-- Current Lecture Info & Change Button -->
-        <div id="current-lecture-info" class="bg-white rounded-lg shadow-md p-4 mb-6 hidden">
-            <div class="flex items-center justify-between">
-                <div>
-                    <span class="text-sm text-gray-500">Current DPP</span>
-                    <h2 id="current-lecture-name" class="text-xl font-semibold text-gray-800"></h2>
+
+        <div id="sidebar-container">
+            <button id="sidebar-toggle" onclick="toggleSidebar()">❯</button>
+            <div id="right-sidebar">
+                <div id="summary-card">
+                    <div class="stat-row"><div class="stat-count" style="background:var(--status-green);" id="count-correct">0</div>Correct</div>
+                    <div class="stat-row"><div class="stat-count" style="background:var(--status-red);" id="count-incorrect">0</div>Incorrect</div>
+                    <div class="stat-row" style="margin-bottom:0;"><div class="stat-count" style="background:var(--status-na);" id="count-na">0</div>Not Answered</div>
                 </div>
-                <button id="change-lecture-btn" class="text-blue-600 hover:underline text-sm">
-                    <i class="fas fa-exchange-alt mr-1"></i>Change Lecture
-                </button>
+                <h4 style="margin:0 0 10px 0; color:var(--pw-dark-blue);">Question Palette</h4>
+                <div class="pal-grid" id="pal-grid"></div>
             </div>
-        </div>
-        
-        <!-- DPP Content Container -->
-        <div id="dpp-container" class="bg-white rounded-lg shadow-md p-6">
-            <p class="text-gray-500 text-center py-8">
-                <i class="fas fa-arrow-up mr-2"></i>Loading DPP...
-            </p>
         </div>
     </div>
+</div>
 
-    <script>
-        // Global variables
-        let currentDpp = null;
-        let chartInstance = null;
-        let userId = null;
-        let allLectures = [];
-        let urlLectureId = null;
+<!-- Lecture Selector Dropdown (floating) -->
+<div id="lecture-selector-section">
+    <div class="flex justify-between items-center mb-3">
+        <h3 class="font-semibold text-gray-700">Select Lecture</h3>
+        <button onclick="hideLectureSelector()" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <select id="lecture-select" class="w-full p-2 border rounded">
+        <option value="">-- Choose a lecture --</option>
+    </select>
+</div>
 
-        // DOM elements
-        const selectEl = document.getElementById('lecture-select');
-        const containerEl = document.getElementById('dpp-container');
-        const lectureSelectionSection = document.getElementById('lecture-selection-section');
-        const currentLectureInfo = document.getElementById('current-lecture-info');
-        const currentLectureNameSpan = document.getElementById('current-lecture-name');
-        const changeLectureBtn = document.getElementById('change-lecture-btn');
-        const closeSelectorBtn = document.getElementById('close-selector-btn');
+<!-- Submit Modal -->
+<div id="modal-overlay">
+    <div id="submit-modal">
+        <div class="modal-icon">📝</div>
+        <h3 style="margin:10px 0; color:var(--pw-dark-blue);">Submit DPP</h3>
+        <p style="color:#666; font-size:0.9rem;">Are you sure you want to submit the DPP?</p>
+        <div id="modal-stats-box">
+            <div class="modal-stat-line"><span>Total Questions</span><span id="m-total">0</span></div>
+            <div class="modal-stat-line" style="color:var(--status-green)"><span>● Correct</span><span id="m-correct">0</span></div>
+            <div class="modal-stat-line" style="color:var(--status-red)"><span>● Incorrect</span><span id="m-incorrect">0</span></div>
+            <div class="modal-stat-line" style="color:var(--status-na)"><span>● Not Answered</span><span id="m-na">0</span></div>
+        </div>
+        <div style="display:flex; gap:12px;">
+            <button class="pw-btn-style" style="flex:1" onclick="hideSubmitModal()">Resume</button>
+            <button class="pw-btn-style" style="flex:1; background:var(--pw-blue); color:white; border:none;" onclick="finalSubmit()">Submit</button>
+        </div>
+    </div>
+</div>
 
-        // Get lectureId from URL
+<!-- Result Page -->
+<div id="result-page">
+    <div class="result-container">
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <h2 style="margin:0; color:var(--pw-dark-blue);" id="result-lecture-name">DPP Results</h2>
+                    <p style="color:#666; margin:5px 0;"><span id="dash-q-count">0</span> Questions</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="pw-btn-style" onclick="reattemptDpp()">Reattempt</button>
+                    <a href="/dashboard.html" class="pw-btn-style">Home</a>
+                </div>
+            </div>
+        </div>
+        <div class="card score-display">
+            <p style="font-weight:bold; color:#666; letter-spacing:1px; margin:0;">YOUR SCORE</p>
+            <div class="score-big"><span id="final-score">0</span><span style="font-size:1.5rem; color:#999;"> / <span id="final-total">0</span></span></div>
+        </div>
+        <div class="analysis-grid">
+            <div class="analysis-card"><span>CORRECT</span><span class="analysis-val" style="color:var(--status-green)" id="res-c">0</span></div>
+            <div class="analysis-card"><span>INCORRECT</span><span class="analysis-val" style="color:var(--status-red)" id="res-i">0</span></div>
+            <div class="analysis-card"><span>SKIPPED</span><span class="analysis-val" id="res-s">0</span></div>
+            <div class="analysis-card"><span>ACCURACY</span><span class="analysis-val" id="res-acc">0%</span></div>
+            <div class="analysis-card"><span>TIME</span><span class="analysis-val" id="res-time">00:00:00</span></div>
+        </div>
+        <!-- Progress Graph -->
+        <div class="card mt-4">
+            <h3 style="margin-top:0;">Progress Trend</h3>
+            <canvas id="progressChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- GLOBAL STATE ----------
+    let questions = [];                // loaded from API
+    let currentDpp = null;             // full DPP object
+    let current = 0;
+    let userAnswers = [];              // array of selected option indices
+    let states = [];                   // 'unanswered' or 'checked'
+    let timers = [];
+    let timerInterval;
+    let userId = null;
+    let allLectures = [];
+    let currentLectureId = null;
+    let chartInstance = null;
+    let testStartTime = Date.now();
+    let totalTestSeconds = 0;
+
+    // DOM elements
+    const testInterface = document.getElementById('test-interface');
+    const resultPage = document.getElementById('result-page');
+    const lectureSelector = document.getElementById('lecture-selector-section');
+    const lectureSelect = document.getElementById('lecture-select');
+    const changeLectureBtn = document.getElementById('change-lecture-btn');
+    const currentLectureBadge = document.getElementById('current-lecture-badge');
+
+    // ---------- INITIALIZATION ----------
+    (async function init() {
+        await fetchUser();
+        await loadAllLectures();
+
         const urlParams = new URLSearchParams(window.location.search);
-        urlLectureId = urlParams.get('lectureId');
+        const urlLectureId = urlParams.get('lectureId');
 
-        // Async initialization
-        (async function init() {
-            await fetchUser();
-            await loadAllLectures();
-            
-            if (urlLectureId) {
-                // Direct link: hide selector, show current lecture info
-                lectureSelectionSection.classList.add('hidden');
-                currentLectureInfo.classList.remove('hidden');
-                await loadDpp(urlLectureId);
-            } else {
-                // No lectureId: show selector
-                lectureSelectionSection.classList.remove('hidden');
-                currentLectureInfo.classList.add('hidden');
-                containerEl.innerHTML = `<p class="text-gray-500 text-center py-8">Select a lecture to start practicing</p>`;
-            }
-        })();
-
-        async function fetchUser() {
-            try {
-                const res = await fetch('/api/me', { credentials: 'include' });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success && data.user) {
-                        userId = data.user.id || data.user._id;
-                    }
-                }
-            } catch (e) {
-                console.warn('Could not fetch user ID');
-            }
+        if (urlLectureId) {
+            currentLectureId = urlLectureId;
+            changeLectureBtn.style.display = 'inline-block';
+            await loadDpp(currentLectureId);
+        } else {
+            // Show lecture selector
+            showLectureSelector();
         }
+    })();
 
-        async function loadAllLectures() {
-            try {
-                const res = await fetch('/api/dpp/lectures');
-                if (!res.ok) throw new Error('Failed to load lectures');
-                allLectures = await res.json();
-                
-                allLectures.forEach(lec => {
-                    const option = document.createElement('option');
-                    option.value = lec.lectureId;
-                    option.textContent = `${lec.lectureName} ${lec.subject ? `(${lec.subject})` : ''}`;
-                    selectEl.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading lectures:', error);
-            }
-        }
-
-        async function loadDpp(lectureId) {
-            if (!lectureId) {
-                containerEl.innerHTML = `<p class="text-red-500 text-center py-8">No lecture selected.</p>`;
-                return;
-            }
-            
-            containerEl.innerHTML = `
-                <div class="text-center py-8">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <p class="mt-2 text-gray-600">Loading DPP...</p>
-                </div>
-            `;
-            
-            try {
-                const res = await fetch(`/api/dpp/${lectureId}`);
-                if (!res.ok) {
-                    if (res.status === 404) {
-                        containerEl.innerHTML = `<p class="text-red-500 text-center py-8">No DPP found for this lecture.</p>`;
-                        // Still show lecture name if we have it
-                        const lecture = allLectures.find(l => l.lectureId === lectureId);
-                        if (lecture) currentLectureNameSpan.textContent = lecture.lectureName;
-                    } else {
-                        throw new Error('Failed to load DPP');
-                    }
-                    return;
-                }
-                const dpp = await res.json();
-                currentDpp = dpp;
-                currentLectureNameSpan.textContent = dpp.lectureName;
-                renderDpp(dpp);
-            } catch (error) {
-                console.error('Error loading DPP:', error);
-                containerEl.innerHTML = `<p class="text-red-500 text-center py-8">Error loading DPP. Please try again.</p>`;
-            }
-        }
-
-        function renderDpp(dpp) {
-            let html = `
-                <div class="mb-6">
-                    <p class="text-gray-500 text-sm">${dpp.questions.length} questions</p>
-                </div>
-            `;
-            
-            dpp.questions.forEach((q, index) => {
-                html += `<div class="mb-8 p-5 border border-gray-200 rounded-lg hover:shadow-sm transition" data-question-id="${q.id}">`;
-                html += `<p class="font-medium text-lg mb-3">${index + 1}. ${q.questionText}</p>`;
-                
-                q.options.forEach((opt, optIndex) => {
-                    html += `
-                        <label class="block ml-6 mb-2 cursor-pointer">
-                            <input type="radio" name="q${index}" value="${optIndex}" class="mr-2">
-                            <span class="text-gray-700">${String.fromCharCode(65 + optIndex)}. ${opt}</span>
-                        </label>
-                    `;
-                });
-                
-                html += `</div>`;
-            });
-            
-            html += `
-                <div class="flex gap-3 mt-6">
-                    <button id="submit-dpp" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition">
-                        <i class="fas fa-paper-plane mr-2"></i>Submit Answers
-                    </button>
-                    <button id="reset-dpp" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-6 rounded-lg transition">
-                        <i class="fas fa-undo-alt mr-2"></i>Reset
-                    </button>
-                </div>
-                <div id="result-area" class="mt-6"></div>
-            `;
-            
-            containerEl.innerHTML = html;
-            
-            document.getElementById('submit-dpp').addEventListener('click', submitDpp);
-            document.getElementById('reset-dpp').addEventListener('click', () => {
-                document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
-                const resultArea = document.getElementById('result-area');
-                if (resultArea) resultArea.innerHTML = '';
-                if (chartInstance) {
-                    chartInstance.destroy();
-                    chartInstance = null;
-                }
-            });
-        }
-
-        async function submitDpp() {
-            if (!currentDpp) return;
-            if (!userId) {
-                alert('You must be logged in to submit answers.');
-                return;
-            }
-            
-            const answers = [];
-            const questionDivs = document.querySelectorAll('[data-question-id]');
-            
-            questionDivs.forEach(div => {
-                const qId = div.dataset.questionId;
-                const selectedRadio = div.querySelector('input[type="radio"]:checked');
-                answers.push({
-                    questionId: qId,
-                    selectedOption: selectedRadio ? parseInt(selectedRadio.value) : -1
-                });
-            });
-            
-            const submitBtn = document.getElementById('submit-dpp');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
-            
-            try {
-                const res = await fetch('/api/dpp/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lectureId: currentDpp.lectureId,
-                        lectureName: currentDpp.lectureName,
-                        answers
-                    }),
-                    credentials: 'include'
-                });
-                
+    async function fetchUser() {
+        try {
+            const res = await fetch('/api/me', { credentials: 'include' });
+            if (res.ok) {
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Submission failed');
-                
-                if (data.success) {
-                    markAnswers(data.result, currentDpp);
-                    await displayResultAndGraph(data.result, currentDpp.lectureId);
+                if (data.success && data.user) {
+                    userId = data.user.id || data.user._id;
                 }
-            } catch (error) {
-                console.error('Submission error:', error);
-                alert('Failed to submit: ' + error.message);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit Answers';
             }
+        } catch (e) {
+            console.warn('Could not fetch user ID');
         }
+    }
 
-        function markAnswers(result, dpp) {
-            const questionDivs = document.querySelectorAll('[data-question-id]');
-            questionDivs.forEach(div => {
-                const qId = div.dataset.questionId;
-                const question = dpp.questions.find(q => q.id === qId);
-                if (!question) return;
-                
-                const radios = div.querySelectorAll('input[type="radio"]');
-                div.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
-                
-                const answer = result.answers?.find(a => a.questionId === qId);
-                if (answer) {
-                    if (answer.isCorrect) {
-                        div.classList.add('border-l-4', 'border-green-500', 'bg-green-50');
-                    } else {
-                        div.classList.add('border-l-4', 'border-red-500', 'bg-red-50');
-                    }
-                }
-                
-                radios.forEach((radio, idx) => {
-                    const label = radio.closest('label');
-                    if (idx === question.correctAnswer) {
-                        label?.classList.add('text-green-700', 'font-medium');
-                    }
-                });
+    async function loadAllLectures() {
+        try {
+            const res = await fetch('/api/dpp/lectures');
+            if (!res.ok) throw new Error('Failed to load lectures');
+            allLectures = await res.json();
+            allLectures.forEach(lec => {
+                const option = document.createElement('option');
+                option.value = lec.lectureId;
+                option.textContent = `${lec.lectureName} ${lec.subject ? `(${lec.subject})` : ''}`;
+                lectureSelect.appendChild(option);
             });
+        } catch (error) {
+            console.error('Error loading lectures:', error);
         }
+    }
 
-        async function displayResultAndGraph(currentResult, lectureId) {
-            const resultArea = document.getElementById('result-area');
-            
-            let attempts = [];
-            try {
-                const analyticsRes = await fetch(`/api/dpp/analytics/${lectureId}`, { credentials: 'include' });
-                if (analyticsRes.ok) {
-                    const analytics = await analyticsRes.json();
-                    attempts = analytics.attempts || [];
+    async function loadDpp(lectureId) {
+        if (!lectureId) return;
+
+        // Show loading
+        document.getElementById('q-text').innerText = 'Loading questions...';
+        document.getElementById('options').innerHTML = '';
+
+        try {
+            const res = await fetch(`/api/dpp/${lectureId}`);
+            if (!res.ok) {
+                if (res.status === 404) {
+                    alert('No DPP found for this lecture.');
+                    showLectureSelector();
                 }
-            } catch (error) {
-                console.warn('Could not fetch analytics:', error);
+                throw new Error('Failed to load DPP');
             }
-            
-            let html = `
-                <div class="mt-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-xl font-bold text-gray-800">
-                            <i class="fas fa-trophy mr-2 text-yellow-500"></i>Your Score: ${currentResult.score.toFixed(1)}%
-                        </h3>
-                        <span class="text-lg font-medium ${currentResult.score >= 70 ? 'text-green-600' : 'text-orange-600'}">
-                            ${currentResult.correctCount}/${currentResult.totalQuestions} correct
-                        </span>
-                    </div>
-            `;
-            
-            if (attempts.length > 0) {
-                html += `<div class="mt-6"><canvas id="progressChart" width="400" height="200"></canvas></div>`;
-            } else {
-                html += `<p class="mt-4 text-gray-600">Complete more attempts to see your progress graph.</p>`;
+            const dpp = await res.json();
+            currentDpp = dpp;
+            currentLectureId = dpp.lectureId;
+
+            // Transform questions to match the PW format
+            questions = dpp.questions.map((q, idx) => ({
+                id: q.id,
+                text: q.questionText,
+                options: q.options,
+                ans: q.correctAnswer,
+                diff: q.type === 'multiple-choice' ? 'MEDIUM' : 'EASY', // you can add difficulty to DPP model later
+                date: ''
+            }));
+
+            // Initialize state
+            userAnswers = new Array(questions.length).fill(null);
+            states = new Array(questions.length).fill('unanswered');
+            timers = new Array(questions.length).fill(0);
+            current = 0;
+
+            // Update UI
+            currentLectureBadge.textContent = dpp.lectureName;
+            lectureSelector.classList.remove('show');
+            changeLectureBtn.style.display = 'inline-block';
+
+            // Render first question
+            renderQuestion();
+            updatePalette();
+            startTimer();
+
+            // Hide loading message if any
+            document.getElementById('q-area').style.display = 'flex';
+        } catch (error) {
+            console.error('Error loading DPP:', error);
+            alert('Error loading DPP. Please try again.');
+        }
+    }
+
+    // ---------- RENDERING ----------
+    function renderQuestion() {
+        if (!questions.length) return;
+        const q = questions[current];
+        document.getElementById('q-num-box').innerText = current + 1;
+        document.getElementById('q-text').innerText = q.text;
+        const label = document.getElementById('difficulty-label');
+        label.innerText = q.diff;
+        label.style.color = q.diff === 'HARD' ? 'var(--diff-hard)' : (q.diff === 'EASY' ? 'var(--diff-easy)' : 'var(--diff-medium)');
+
+        const optDiv = document.getElementById('options');
+        optDiv.innerHTML = '';
+
+        q.options.forEach((opt, i) => {
+            const div = document.createElement('div');
+            div.className = 'option';
+            if (states[current] === 'checked') {
+                div.style.pointerEvents = 'none';
+                if (i === q.ans) div.classList.add('correct');
+                else if (userAnswers[current] === i) div.classList.add('wrong');
             }
-            
-            html += `</div>`;
-            resultArea.innerHTML = html;
-            
-            if (attempts.length > 0) {
-                const ctx = document.getElementById('progressChart').getContext('2d');
-                const labels = attempts.map((att, i) => `Attempt ${i+1}`);
-                const scores = attempts.map(att => att.score);
-                
-                if (chartInstance) chartInstance.destroy();
-                
-                chartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Score (%)',
-                            data: scores,
-                            borderColor: 'rgb(59, 130, 246)',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 3,
-                            tension: 0.2,
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    afterLabel: (context) => {
-                                        const attempt = attempts[context.dataIndex];
-                                        return `Correct: ${attempt.correctAnswers}/${attempt.totalQuestions}`;
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                max: 100,
-                                title: { display: true, text: 'Score (%)' }
-                            },
-                            x: {
-                                title: { display: true, text: 'Attempt Number' }
-                            }
-                        }
-                    }
-                });
+            div.innerText = (i + 1) + ". " + opt;
+            div.onclick = () => {
+                if (states[current] !== 'checked') {
+                    userAnswers[current] = i;
+                    states[current] = 'checked';
+                    renderQuestion();
+                    updatePalette();
+                }
+            };
+            optDiv.appendChild(div);
+        });
+
+        // Enable/disable nav buttons
+        document.getElementById('prev-btn').disabled = (current === 0);
+        document.getElementById('next-btn').disabled = (current === questions.length - 1);
+    }
+
+    function updatePalette() {
+        const grid = document.getElementById('pal-grid');
+        grid.innerHTML = '';
+        let c = 0, inc = 0, chk = 0;
+
+        questions.forEach((q, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'pal-btn';
+            if (i === current) btn.classList.add('active');
+
+            if (states[i] === 'checked') {
+                chk++;
+                if (userAnswers[i] === q.ans) {
+                    btn.classList.add('res-correct');
+                    c++;
+                } else {
+                    btn.classList.add('res-wrong');
+                    inc++;
+                }
             }
+
+            btn.innerText = i + 1;
+            btn.onclick = () => {
+                current = i;
+                renderQuestion();
+                updatePalette();
+            };
+            grid.appendChild(btn);
+        });
+
+        document.getElementById('count-correct').innerText = c;
+        document.getElementById('count-incorrect').innerText = inc;
+        document.getElementById('count-na').innerText = questions.length - chk;
+    }
+
+    function nav(delta) {
+        const newIdx = current + delta;
+        if (newIdx >= 0 && newIdx < questions.length) {
+            current = newIdx;
+            renderQuestion();
+            updatePalette();
+        }
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if (states[current] !== 'checked') timers[current]++;
+            let t = timers[current];
+            let h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+            document.getElementById('timer-display').innerText = 
+                `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        }, 1000);
+    }
+
+    function toggleSidebar() {
+        const container = document.getElementById('sidebar-container');
+        const btn = document.getElementById('sidebar-toggle');
+        const isCollapsed = container.classList.toggle('collapsed');
+        btn.innerText = isCollapsed ? '❮' : '❯';
+    }
+
+    // ---------- LECTURE SELECTOR ----------
+    function showLectureSelector() {
+        lectureSelector.classList.add('show');
+        testInterface.style.opacity = '0.5';
+        testInterface.style.pointerEvents = 'none';
+    }
+
+    function hideLectureSelector() {
+        lectureSelector.classList.remove('show');
+        testInterface.style.opacity = '1';
+        testInterface.style.pointerEvents = 'auto';
+    }
+
+    lectureSelect.addEventListener('change', (e) => {
+        const newId = e.target.value;
+        if (newId) {
+            currentLectureId = newId;
+            hideLectureSelector();
+            loadDpp(newId);
+            // Update URL without reload
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('lectureId', newId);
+            window.history.pushState({}, '', newUrl);
+        }
+    });
+
+    changeLectureBtn.addEventListener('click', () => {
+        showLectureSelector();
+        lectureSelect.value = currentLectureId || '';
+    });
+
+    // ---------- SUBMIT MODAL ----------
+    function showSubmitModal() {
+        document.getElementById('m-total').innerText = questions.length;
+        document.getElementById('m-correct').innerText = document.getElementById('count-correct').innerText;
+        document.getElementById('m-incorrect').innerText = document.getElementById('count-incorrect').innerText;
+        document.getElementById('m-na').innerText = document.getElementById('count-na').innerText;
+        document.getElementById('modal-overlay').style.display = 'flex';
+    }
+
+    function hideSubmitModal() {
+        document.getElementById('modal-overlay').style.display = 'none';
+    }
+
+    async function finalSubmit() {
+        if (!userId) {
+            alert('You must be logged in to submit.');
+            return;
         }
 
-        // Event listeners
-        selectEl.addEventListener('change', (e) => {
-            const newLectureId = e.target.value;
-            if (newLectureId) {
-                // Update URL without reload
-                const newUrl = new URL(window.location);
-                newUrl.searchParams.set('lectureId', newLectureId);
-                window.history.pushState({}, '', newUrl);
-                urlLectureId = newLectureId;
-                
-                // Hide selector, show info
-                lectureSelectionSection.classList.add('hidden');
-                currentLectureInfo.classList.remove('hidden');
-                loadDpp(newLectureId);
+        // Calculate total time
+        totalTestSeconds = Math.floor((Date.now() - testStartTime) / 1000);
+
+        // Prepare answers for API
+        const answers = questions.map((q, i) => ({
+            questionId: q.id,
+            selectedOption: userAnswers[i] !== null ? userAnswers[i] : -1,
+            timeSpent: timers[i]
+        }));
+
+        const submitBtn = document.querySelector('#submit-modal .pw-btn-style:last-child');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
+
+        try {
+            const res = await fetch('/api/dpp/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lectureId: currentDpp.lectureId,
+                    lectureName: currentDpp.lectureName,
+                    answers
+                }),
+                credentials: 'include'
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Submission failed');
+
+            if (data.success) {
+                displayResultPage(data.result);
+            }
+        } catch (error) {
+            console.error('Submission error:', error);
+            alert('Failed to submit: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Submit';
+            hideSubmitModal();
+        }
+    }
+
+    function displayResultPage(result) {
+        testInterface.style.display = 'none';
+        resultPage.style.display = 'block';
+
+        const correct = result.correctCount;
+        const total = result.totalQuestions;
+        const incorrect = result.totalQuestions - correct - (total - (correct + (total - correct))); // simplified: incorrect = total - correct - unanswered
+        // Actually we can compute from answers but easier:
+        let inc = 0, unatt = 0;
+        states.forEach((s, i) => {
+            if (s === 'checked') {
+                if (userAnswers[i] !== questions[i].ans) inc++;
+            } else {
+                unatt++;
             }
         });
 
-        changeLectureBtn.addEventListener('click', () => {
-            lectureSelectionSection.classList.remove('hidden');
-            currentLectureInfo.classList.add('hidden');
-            // Pre-select current lecture in dropdown if any
-            if (urlLectureId) {
-                selectEl.value = urlLectureId;
-            }
-        });
+        document.getElementById('result-lecture-name').innerText = currentDpp.lectureName;
+        document.getElementById('dash-q-count').innerText = total;
+        document.getElementById('final-score').innerText = correct;
+        document.getElementById('final-total').innerText = total;
 
-        closeSelectorBtn.addEventListener('click', () => {
-            lectureSelectionSection.classList.add('hidden');
-            currentLectureInfo.classList.remove('hidden');
-            if (urlLectureId) {
-                loadDpp(urlLectureId);
-            }
-        });
-    </script>
+        document.getElementById('res-c').innerText = correct;
+        document.getElementById('res-i').innerText = inc;
+        document.getElementById('res-s').innerText = unatt;
+        const attempted = correct + inc;
+        document.getElementById('res-acc').innerText = attempted > 0 ? Math.round((correct / attempted) * 100) + "%" : "0%";
+
+        let h = Math.floor(totalTestSeconds / 3600), m = Math.floor((totalTestSeconds % 3600) / 60), s = totalTestSeconds % 60;
+        document.getElementById('res-time').innerText = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+        // Load progress graph
+        loadProgressGraph(currentDpp.lectureId);
+    }
+
+    async function loadProgressGraph(lectureId) {
+        try {
+            const res = await fetch(`/api/dpp/analytics/${lectureId}`, { credentials: 'include' });
+            if (!res.ok) return;
+            const analytics = await res.json();
+            const attempts = analytics.attempts || [];
+            if (attempts.length === 0) return;
+
+            const ctx = document.getElementById('progressChart').getContext('2d');
+            const labels = attempts.map((_, i) => `Attempt ${i+1}`);
+            const scores = attempts.map(a => a.score);
+
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Score (%)',
+                        data: scores,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+        } catch (err) {
+            console.warn('Could not load progress graph', err);
+        }
+    }
+
+    function reattemptDpp() {
+        // Reset everything and reload same DPP
+        resultPage.style.display = 'none';
+        testInterface.style.display = 'flex';
+        loadDpp(currentLectureId);
+        testStartTime = Date.now();
+    }
+
+    // Expose functions for inline onclick
+    window.toggleSidebar = toggleSidebar;
+    window.nav = nav;
+    window.showSubmitModal = showSubmitModal;
+    window.hideSubmitModal = hideSubmitModal;
+    window.finalSubmit = finalSubmit;
+    window.showLectureSelector = showLectureSelector;
+    window.hideLectureSelector = hideLectureSelector;
+    window.reattemptDpp = reattemptDpp;
+</script>
 </body>
 </html>
