@@ -538,6 +538,7 @@ function renderSidebar(chapters) {
     container.appendChild(div);
   });
 }
+
 function renderLectures(lectures) {
   const container = document.getElementById('main-content');
   let html = '';
@@ -545,6 +546,10 @@ function renderLectures(lectures) {
   lectures.forEach(lec => {
     const imageUrl = lec.imageUrl || "https://via.placeholder.com/80x80/1f2937/ffffff?text=Instructor";
     const isCompleted = lec.completed === true;
+    // Store lecture data for the modal
+    const lectureId = lec._id;
+    const pdfLink = lec.pdfLink || '';
+    const hasDpp = lec.hasDpp === true;
     html += `
       <div class="lecture-card bg-white rounded-3xl p-5 flex gap-4 border border-gray-100 mb-5">
         <img src="${imageUrl}" class="w-16 h-16 rounded-2xl object-cover flex-shrink-0">
@@ -555,21 +560,45 @@ function renderLectures(lectures) {
           </div>
           <div class="flex gap-3 mt-5">
             <button onclick="playVideo('${lec.youtubeId || ''}')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-play"></i> Watch</button>
-            <button onclick="showNotesModal('${lec.pdfLink || ''}', '${lec.dppLink || ''}')" class="flex-1 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-book-open"></i> Notes & More</button>
+            <button onclick="showNotesModal('${lectureId}', '${pdfLink}', ${hasDpp})" class="flex-1 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 py-2.5 rounded-2xl text-sm font-medium flex items-center justify-center gap-2"><i class="fa-solid fa-book-open"></i> Notes & More</button>
           </div>
         </div>
       </div>`;
   });
   container.innerHTML = html;
 }
-function showNotesModal(pdfLink, dppLink) {
-  currentPdfLink = pdfLink; currentDppLink = dppLink;
-  if (!pdfLink && !dppLink) { showToast("Notes and DPP will be added soon for this lecture!", "info"); return; }
+let currentLectureId = '';
+let currentHasDpp = false;
+// currentPdfLink already declared earlier – do NOT redeclare
+function showNotesModal(lectureId, pdfLink, hasDpp) {
+  currentLectureId = lectureId;
+  currentPdfLink = pdfLink;
+  currentHasDpp = hasDpp;
+  // Always show modal – buttons will decide what to do
   document.getElementById('notes-modal').classList.remove('hidden');
 }
-function hideNotesModal() { document.getElementById('notes-modal').classList.add('hidden'); }
-function openPdf() { if (currentPdfLink) window.open(currentPdfLink, '_blank'); hideNotesModal(); }
-function openDpp() { if (currentDppLink) window.open(currentDppLink, '_blank'); hideNotesModal(); }
+
+function hideNotesModal() {
+  document.getElementById('notes-modal').classList.add('hidden');
+}
+
+function openPdf() {
+  if (currentPdfLink) {
+    window.open(currentPdfLink, '_blank');
+  } else {
+    showToast("No PDF notes available for this lecture.", "info");
+  }
+  hideNotesModal();
+}
+
+function openDpp() {
+  if (currentHasDpp) {
+    window.location.href = `/dpp-viewer.html?lectureId=${currentLectureId}`;
+  } else {
+    showToast("DPP not yet added for this lecture. It will be available soon.", "info");
+  }
+  hideNotesModal();
+}
 function applyFilters() {
   const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
   const filterType = document.getElementById('filter-select').value;
