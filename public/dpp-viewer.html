@@ -3,21 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DPP Viewer</title>
-    <!-- Tailwind CSS for styling -->
+    <title>DPP Practice</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js for graphs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <!-- Optional: Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         .correct-answer { background-color: #d1fae5; }
         .incorrect-answer { background-color: #fee2e2; }
-        .tab-active { background-color: white; border-bottom: 2px solid #3b82f6; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div class="max-w-4xl mx-auto py-8 px-4">
+        <!-- Header -->
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-pencil-alt mr-2 text-blue-600"></i>Daily Practice Problems
@@ -25,18 +22,36 @@
             <a href="/dashboard.html" class="text-blue-600 hover:underline">&larr; Back to Dashboard</a>
         </div>
         
-        <!-- Lecture Selection -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <label class="block text-gray-700 font-medium mb-2">Select Lecture:</label>
+        <!-- Lecture Selection (hidden by default when lectureId is in URL) -->
+        <div id="lecture-selection-section" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+            <div class="flex items-center justify-between mb-3">
+                <label class="block text-gray-700 font-medium">Select Lecture:</label>
+                <button id="close-selector-btn" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
             <select id="lecture-select" class="w-full md:w-2/3 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <option value="">-- Choose a lecture --</option>
             </select>
         </div>
         
+        <!-- Current Lecture Info & Change Button -->
+        <div id="current-lecture-info" class="bg-white rounded-lg shadow-md p-4 mb-6 hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-sm text-gray-500">Current DPP</span>
+                    <h2 id="current-lecture-name" class="text-xl font-semibold text-gray-800"></h2>
+                </div>
+                <button id="change-lecture-btn" class="text-blue-600 hover:underline text-sm">
+                    <i class="fas fa-exchange-alt mr-1"></i>Change Lecture
+                </button>
+            </div>
+        </div>
+        
         <!-- DPP Content Container -->
         <div id="dpp-container" class="bg-white rounded-lg shadow-md p-6">
             <p class="text-gray-500 text-center py-8">
-                <i class="fas fa-arrow-up mr-2"></i>Select a lecture to start practicing
+                <i class="fas fa-arrow-up mr-2"></i>Loading DPP...
             </p>
         </div>
     </div>
@@ -46,15 +61,38 @@
         let currentDpp = null;
         let chartInstance = null;
         let userId = null;
+        let allLectures = [];
+        let urlLectureId = null;
 
         // DOM elements
         const selectEl = document.getElementById('lecture-select');
         const containerEl = document.getElementById('dpp-container');
+        const lectureSelectionSection = document.getElementById('lecture-selection-section');
+        const currentLectureInfo = document.getElementById('current-lecture-info');
+        const currentLectureNameSpan = document.getElementById('current-lecture-name');
+        const changeLectureBtn = document.getElementById('change-lecture-btn');
+        const closeSelectorBtn = document.getElementById('close-selector-btn');
+
+        // Get lectureId from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        urlLectureId = urlParams.get('lectureId');
 
         // Async initialization
         (async function init() {
             await fetchUser();
-            await loadLectures();
+            await loadAllLectures();
+            
+            if (urlLectureId) {
+                // Direct link: hide selector, show current lecture info
+                lectureSelectionSection.classList.add('hidden');
+                currentLectureInfo.classList.remove('hidden');
+                await loadDpp(urlLectureId);
+            } else {
+                // No lectureId: show selector
+                lectureSelectionSection.classList.remove('hidden');
+                currentLectureInfo.classList.add('hidden');
+                containerEl.innerHTML = `<p class="text-gray-500 text-center py-8">Select a lecture to start practicing</p>`;
+            }
         })();
 
         async function fetchUser() {
@@ -71,41 +109,26 @@
             }
         }
 
-        // Fetch and populate lecture dropdown
-        async function loadLectures() {
+        async function loadAllLectures() {
             try {
                 const res = await fetch('/api/dpp/lectures');
                 if (!res.ok) throw new Error('Failed to load lectures');
-                const lectures = await res.json();
+                allLectures = await res.json();
                 
-                // Group by subject (optional)
-                lectures.forEach(lec => {
+                allLectures.forEach(lec => {
                     const option = document.createElement('option');
                     option.value = lec.lectureId;
                     option.textContent = `${lec.lectureName} ${lec.subject ? `(${lec.subject})` : ''}`;
                     selectEl.appendChild(option);
                 });
-
-                // Check if lectureId provided in URL query param
-                const urlParams = new URLSearchParams(window.location.search);
-                const lectureIdParam = urlParams.get('lectureId');
-                if (lectureIdParam) {
-                    // Wait a tick for options to be populated
-                    setTimeout(() => {
-                        selectEl.value = lectureIdParam;
-                        loadDpp(lectureIdParam);
-                    }, 50);
-                }
             } catch (error) {
                 console.error('Error loading lectures:', error);
-                alert('Failed to load lectures. Please refresh.');
             }
         }
 
-        // Load and render DPP for selected lecture
         async function loadDpp(lectureId) {
             if (!lectureId) {
-                containerEl.innerHTML = `<p class="text-gray-500 text-center py-8">Select a lecture to start practicing</p>`;
+                containerEl.innerHTML = `<p class="text-red-500 text-center py-8">No lecture selected.</p>`;
                 return;
             }
             
@@ -121,6 +144,9 @@
                 if (!res.ok) {
                     if (res.status === 404) {
                         containerEl.innerHTML = `<p class="text-red-500 text-center py-8">No DPP found for this lecture.</p>`;
+                        // Still show lecture name if we have it
+                        const lecture = allLectures.find(l => l.lectureId === lectureId);
+                        if (lecture) currentLectureNameSpan.textContent = lecture.lectureName;
                     } else {
                         throw new Error('Failed to load DPP');
                     }
@@ -128,6 +154,7 @@
                 }
                 const dpp = await res.json();
                 currentDpp = dpp;
+                currentLectureNameSpan.textContent = dpp.lectureName;
                 renderDpp(dpp);
             } catch (error) {
                 console.error('Error loading DPP:', error);
@@ -135,11 +162,9 @@
             }
         }
 
-        // Render DPP questions
         function renderDpp(dpp) {
             let html = `
                 <div class="mb-6">
-                    <h2 class="text-2xl font-semibold text-gray-800">${dpp.lectureName}</h2>
                     <p class="text-gray-500 text-sm">${dpp.questions.length} questions</p>
                 </div>
             `;
@@ -148,7 +173,6 @@
                 html += `<div class="mb-8 p-5 border border-gray-200 rounded-lg hover:shadow-sm transition" data-question-id="${q.id}">`;
                 html += `<p class="font-medium text-lg mb-3">${index + 1}. ${q.questionText}</p>`;
                 
-                // Options
                 q.options.forEach((opt, optIndex) => {
                     html += `
                         <label class="block ml-6 mb-2 cursor-pointer">
@@ -175,7 +199,6 @@
             
             containerEl.innerHTML = html;
             
-            // Attach event listeners
             document.getElementById('submit-dpp').addEventListener('click', submitDpp);
             document.getElementById('reset-dpp').addEventListener('click', () => {
                 document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
@@ -188,7 +211,6 @@
             });
         }
 
-        // Submit answers to backend
         async function submitDpp() {
             if (!currentDpp) return;
             if (!userId) {
@@ -196,7 +218,6 @@
                 return;
             }
             
-            // Gather answers
             const answers = [];
             const questionDivs = document.querySelectorAll('[data-question-id]');
             
@@ -209,7 +230,6 @@
                 });
             });
             
-            // Show loading state
             const submitBtn = document.getElementById('submit-dpp');
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
@@ -230,9 +250,7 @@
                 if (!res.ok) throw new Error(data.error || 'Submission failed');
                 
                 if (data.success) {
-                    // Mark correct/incorrect answers in UI
                     markAnswers(data.result, currentDpp);
-                    // Display result and graph
                     await displayResultAndGraph(data.result, currentDpp.lectureId);
                 }
             } catch (error) {
@@ -244,7 +262,6 @@
             }
         }
 
-        // Highlight correct/incorrect answers in the UI
         function markAnswers(result, dpp) {
             const questionDivs = document.querySelectorAll('[data-question-id]');
             questionDivs.forEach(div => {
@@ -253,10 +270,8 @@
                 if (!question) return;
                 
                 const radios = div.querySelectorAll('input[type="radio"]');
-                // Remove previous markings
                 div.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
                 
-                // Find the submitted answer
                 const answer = result.answers?.find(a => a.questionId === qId);
                 if (answer) {
                     if (answer.isCorrect) {
@@ -266,7 +281,6 @@
                     }
                 }
                 
-                // Optionally show correct answer indicator
                 radios.forEach((radio, idx) => {
                     const label = radio.closest('label');
                     if (idx === question.correctAnswer) {
@@ -276,11 +290,9 @@
             });
         }
 
-        // Display result summary and progress graph
         async function displayResultAndGraph(currentResult, lectureId) {
             const resultArea = document.getElementById('result-area');
             
-            // Fetch historical attempts
             let attempts = [];
             try {
                 const analyticsRes = await fetch(`/api/dpp/analytics/${lectureId}`, { credentials: 'include' });
@@ -292,7 +304,6 @@
                 console.warn('Could not fetch analytics:', error);
             }
             
-            // Build result display
             let html = `
                 <div class="mt-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
                     <div class="flex items-center justify-between">
@@ -305,7 +316,6 @@
                     </div>
             `;
             
-            // Add canvas for chart if there's more than one attempt
             if (attempts.length > 0) {
                 html += `<div class="mt-6"><canvas id="progressChart" width="400" height="200"></canvas></div>`;
             } else {
@@ -315,13 +325,11 @@
             html += `</div>`;
             resultArea.innerHTML = html;
             
-            // Render chart
             if (attempts.length > 0) {
                 const ctx = document.getElementById('progressChart').getContext('2d');
                 const labels = attempts.map((att, i) => `Attempt ${i+1}`);
                 const scores = attempts.map(att => att.score);
                 
-                // Destroy previous chart if exists
                 if (chartInstance) chartInstance.destroy();
                 
                 chartInstance = new Chart(ctx, {
@@ -366,7 +374,38 @@
         }
 
         // Event listeners
-        selectEl.addEventListener('change', (e) => loadDpp(e.target.value));
+        selectEl.addEventListener('change', (e) => {
+            const newLectureId = e.target.value;
+            if (newLectureId) {
+                // Update URL without reload
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.set('lectureId', newLectureId);
+                window.history.pushState({}, '', newUrl);
+                urlLectureId = newLectureId;
+                
+                // Hide selector, show info
+                lectureSelectionSection.classList.add('hidden');
+                currentLectureInfo.classList.remove('hidden');
+                loadDpp(newLectureId);
+            }
+        });
+
+        changeLectureBtn.addEventListener('click', () => {
+            lectureSelectionSection.classList.remove('hidden');
+            currentLectureInfo.classList.add('hidden');
+            // Pre-select current lecture in dropdown if any
+            if (urlLectureId) {
+                selectEl.value = urlLectureId;
+            }
+        });
+
+        closeSelectorBtn.addEventListener('click', () => {
+            lectureSelectionSection.classList.add('hidden');
+            currentLectureInfo.classList.remove('hidden');
+            if (urlLectureId) {
+                loadDpp(urlLectureId);
+            }
+        });
     </script>
 </body>
 </html>
