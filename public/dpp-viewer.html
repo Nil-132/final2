@@ -535,6 +535,10 @@
     async function fetchUser() {
         try {
             const res = await fetch('/api/me', { credentials: 'include' });
+            if (res.status === 401) {
+                window.location.href = '/login.html';
+                return;
+            }
             if (res.ok) {
                 const data = await res.json();
                 if (data.success && data.user) {
@@ -571,7 +575,10 @@
         try {
             const res = await fetch(`/api/dpp/${lectureId}`);
             if (!res.ok) {
-                if (res.status === 404) alert('No DPP found for this lecture.');
+                if (res.status === 404) {
+                    alert('No DPP found for this lecture.');
+                    showLectureSelector();
+                }
                 throw new Error('Failed to load DPP');
             }
             const dpp = await res.json();
@@ -751,6 +758,7 @@
     async function finalSubmit() {
         if (!userId) {
             alert('You must be logged in to submit.');
+            window.location.href = '/login.html';
             return;
         }
 
@@ -777,6 +785,12 @@
                 }),
                 credentials: 'include'
             });
+
+            if (res.status === 401) {
+                alert('Your session has expired. Please log in again.');
+                window.location.href = '/login.html';
+                return;
+            }
 
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Submission failed');
