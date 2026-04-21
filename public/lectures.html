@@ -544,33 +544,50 @@ function renderLectures(lectures) {
   });
   container.innerHTML = html;
 }
+
+// ---------- NOTES & DPP MODAL (FIXED) ----------
 function showNotesModal(pdfLink, dppLink, lectureId) {
   currentPdfLink = pdfLink; 
   currentDppLink = dppLink; 
   currentLectureId = lectureId;
-  
-  // Always show the modal – even if links are missing, because DPP might be dynamically added later.
   document.getElementById('notes-modal').classList.remove('hidden');
 }
-  document.getElementById('notes-modal').classList.remove('hidden');
+
+function hideNotesModal() { 
+  document.getElementById('notes-modal').classList.add('hidden'); 
 }
-function hideNotesModal() { document.getElementById('notes-modal').classList.add('hidden'); }
+
 function openPdf() { 
-  if (currentPdfLink) window.open(currentPdfLink, '_blank'); 
-  hideNotesModal(); 
-}
-function openDpp() { 
-  if (currentLectureId) {
-    // Open dynamic DPP viewer with lecture ID (handles missing DPP gracefully)
-    window.location.href = `/dpp-viewer.html?lectureId=${currentLectureId}`;
-  } else if (currentDppLink) {
-    // Fallback to static link if no lecture ID (should not happen)
-    window.open(currentDppLink, '_blank');
+  if (currentPdfLink) {
+    window.open(currentPdfLink, '_blank');
   } else {
-    showToast("No DPP available for this lecture yet.", "info");
+    showToast("Notes will be added soon for this lecture!", "info");
   }
   hideNotesModal(); 
 }
+
+async function openDpp() { 
+  hideNotesModal();
+  
+  if (currentLectureId) {
+    try {
+      const res = await fetch(`/api/dpp/${currentLectureId}`);
+      if (res.ok) {
+        window.location.href = `/dpp-viewer.html?lectureId=${currentLectureId}`;
+      } else {
+        showToast("Notes and DPP will be added soon for this lecture!", "info");
+      }
+    } catch (err) {
+      showToast("Notes and DPP will be added soon for this lecture!", "info");
+    }
+  } else if (currentDppLink) {
+    window.open(currentDppLink, '_blank');
+  } else {
+    showToast("Notes and DPP will be added soon for this lecture!", "info");
+  }
+}
+// ---------- END NOTES & DPP MODAL ----------
+
 function applyFilters() {
   const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
   const filterType = document.getElementById('filter-select').value;
