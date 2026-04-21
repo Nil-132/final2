@@ -280,12 +280,21 @@
       }
     }
 
-    window.onload = async () => {
-      const authSuccess = await checkAdmin();
-      if (authSuccess) {
-        await renderSubjects();
-      }
-    };
+    async function initializePage() {
+  const authSuccess = await checkAdmin();
+  if (authSuccess) {
+    await renderSubjects();
+  }
+}
+
+// Handle both initial load and bfcache restoration
+window.addEventListener('load', initializePage);
+window.addEventListener('pageshow', (event) => {
+  // event.persisted is true if the page was restored from bfcache
+  if (event.persisted) {
+    initializePage();
+  }
+});
   </script>
 </body>
 </html>
