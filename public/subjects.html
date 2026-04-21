@@ -88,7 +88,6 @@
 
   <script>
     let isAdmin = false;
-    // Map color names to Tailwind classes (must be complete strings)
     const colorClasses = {
       blue: { text: 'text-blue-600', bg: 'bg-blue-600' },
       purple: { text: 'text-purple-600', bg: 'bg-purple-600' },
@@ -109,11 +108,32 @@
             document.getElementById('add-subject-btn').classList.remove('hidden');
             document.getElementById('manage-dpp-btn').classList.remove('hidden');
           }
+          return true;
         } else {
           window.location.href = '/login.html';
+          return false;
         }
       } catch (err) {
         window.location.href = '/login.html';
+        return false;
+      }
+    }
+
+    async function fetchLecturesForSubject(subjectId, subjectName) {
+      try {
+        const res = await fetch(`/api/lectures?subjectId=${subjectId}`, { credentials: 'include' });
+        if (res.ok) {
+          const lectures = await res.json();
+          const total = lectures.length;
+          const completed = lectures.filter(l => l.completed === true).length;
+          return { total, completed };
+        } else {
+          console.warn(`Failed to fetch lectures for ${subjectName} (${subjectId})`);
+          return { total: 0, completed: 0 };
+        }
+      } catch (e) {
+        console.warn(`Error fetching lectures for ${subjectName}`, e);
+        return { total: 0, completed: 0 };
       }
     }
 
@@ -133,28 +153,14 @@
           return;
         }
 
+        // Process subjects sequentially to avoid overwhelming the server
         let html = '';
         for (let sub of subjects) {
           const subjectId = sub._id || sub.id;
-          console.log(`Loading subject: ${sub.name}, ID: ${subjectId}`);
-          
-          let total = 0, completed = 0;
-          try {
-            const lecRes = await fetch(`/api/lectures?subjectId=${subjectId}`, { credentials: 'include' });
-            if (lecRes.ok) {
-              const lectures = await lecRes.json();
-              total = lectures.length;
-              completed = lectures.filter(l => l.completed === true).length;
-            } else {
-              console.warn(`Failed to load lectures for ${sub.name} (${subjectId})`);
-            }
-          } catch (e) {
-            console.warn('Could not load lectures for', sub.name, e);
-          }
-
+          const { total, completed } = await fetchLecturesForSubject(subjectId, sub.name);
+          const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
           const color = sub.color || 'blue';
           const icon = sub.icon || '📚';
-          const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
           const colorSet = colorClasses[color] || colorClasses.blue;
 
           html += `
@@ -259,8 +265,10 @@
     }
 
     window.onload = async () => {
-      await checkAdmin();
-      await renderSubjects();
+      const authSuccess = await checkAdmin();
+      if (authSuccess) {
+        await renderSubjects();
+      }
     };
   </script>
 </body>
