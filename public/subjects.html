@@ -21,7 +21,6 @@
   </style>
 </head>
 <body class="min-h-screen">
-  <!-- Header (unchanged) -->
   <nav class="bg-white border-b-2 border-blue-600 shadow-lg sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
       <div class="flex items-center gap-3">
@@ -63,7 +62,6 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="subjects-container"></div>
   </div>
 
-  <!-- Add Subject Modal (unchanged) -->
   <div id="add-subject-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[200]">
     <div class="bg-white rounded-3xl p-8 w-full max-w-md mx-4">
       <h3 class="text-2xl font-semibold mb-6 text-center">Add New Subject</h3>
@@ -128,9 +126,8 @@
 
         let html = '';
         for (let sub of subjects) {
-          // Ensure we get the correct subject ID
-          const subjectId = sub._id || sub.id || sub.subjectId;
-          console.log(`Loading subject: ${sub.name}, ID: ${subjectId}`);
+          // Use the actual MongoDB _id as subjectId
+          const subjectId = sub._id || sub.id;
           
           let total = 0, completed = 0;
           try {
@@ -139,8 +136,6 @@
               const lectures = await lecRes.json();
               total = lectures.length;
               completed = lectures.filter(l => l.completed === true).length;
-            } else {
-              console.warn(`Failed to load lectures for ${sub.name} (${subjectId})`);
             }
           } catch (e) {
             console.warn('Could not load lectures for', sub.name, e);
