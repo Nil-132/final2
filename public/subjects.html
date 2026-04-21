@@ -1,275 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Subjects - My PW</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
-  <style>
-    body {
-      background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
-      font-family: 'Inter', system-ui, sans-serif;
-    }
-    .subject-card {
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .subject-card:hover {
-      transform: translateY(-15px);
-      box-shadow: 0 30px 60px -15px rgb(37 99 235 / 0.25);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subjects - My PW</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f5f7fa; }
+        .navbar { background: white; padding: 1rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: bold; color: #2563eb; }
+        .nav-links { display: flex; gap: 2rem; }
+        .nav-links a { text-decoration: none; color: #4b5563; font-weight: 500; }
+        .logout-btn { background: #ef4444; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { margin-bottom: 2rem; color: #1f2937; }
+        .subjects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+        .subject-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s; cursor: pointer; }
+        .subject-card:hover { transform: translateY(-4px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .subject-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .subject-name { font-size: 1.25rem; font-weight: 600; }
+    </style>
 </head>
-<body class="min-h-screen">
-  <nav class="bg-white border-b-2 border-blue-600 shadow-lg sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl">P</div>
-        <div>
-          <h1 class="text-2xl font-bold text-gray-800">My PW</h1>
-          <p class="text-xs text-gray-500 -mt-1">By Alakh Sir Fans</p>
+<body>
+    <nav class="navbar">
+        <div class="logo">My PW</div>
+        <div class="nav-links">
+            <a href="dashboard.html">Dashboard</a>
+            <a href="subjects.html">Subjects</a>
+            <a href="/progress">Progress</a>
         </div>
-      </div>
-      <div class="flex items-center gap-6">
-        <a href="dashboard.html" class="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition">
-          <i class="fas fa-home"></i>
-          <span class="hidden md:inline">Dashboard</span>
-        </a>
-        <button id="add-subject-btn" onclick="showAddSubjectModal()"
-                class="hidden flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-2xl text-sm font-medium">
-          <i class="fa-solid fa-plus"></i> Add Subject
-        </button>
-        <button id="manage-dpp-btn" onclick="window.location.href='/manage.html'"
-                class="hidden flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-2xl text-sm font-medium">
-          <i class="fa-solid fa-pen-to-square"></i> Manage DPP
-        </button>
-        <div class="text-sm text-gray-600 hidden md:block">
-          Welcome, <span id="user-name" class="font-semibold text-blue-600"></span>
+        <button class="logout-btn" id="logoutBtn">Logout</button>
+    </nav>
+
+    <div class="container">
+        <h1>All Subjects</h1>
+        <div id="subjectsContainer" class="subjects-grid">
+            <div class="loading">Loading subjects...</div>
         </div>
-        <button onclick="logout()"
-                class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-2xl text-sm font-medium transition-all">
-          <i class="fa-solid fa-right-from-bracket"></i> Logout
-        </button>
-      </div>
     </div>
-  </nav>
 
-  <div class="max-w-7xl mx-auto px-6 py-12">
-    <div class="text-center mb-12">
-      <h2 class="text-4xl font-bold text-gray-800 mb-3">Choose Your Subject</h2>
-      <p class="text-gray-600 text-lg">Learn from the best teachers • Crack your exam with confidence</p>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="subjects-container"></div>
-  </div>
+    <script>
+        const API_BASE = window.location.origin;
 
-  <div id="add-subject-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[200]">
-    <div class="bg-white rounded-3xl p-8 w-full max-w-md mx-4">
-      <h3 class="text-2xl font-semibold mb-6 text-center">Add New Subject</h3>
-      <div class="space-y-5">
-        <input id="new-subject-name" type="text" placeholder="Subject Name (e.g. General Awareness)"
-               class="w-full border border-gray-300 rounded-2xl px-5 py-4">
-        <input id="new-subject-icon" type="text" placeholder="Icon (e.g. 🌍)"
-               class="w-full border border-gray-300 rounded-2xl px-5 py-4">
-        <select id="new-subject-color" class="w-full border border-gray-300 rounded-2xl px-5 py-4">
-          <option value="blue">Blue</option>
-          <option value="purple">Purple</option>
-          <option value="pink">Pink</option>
-          <option value="emerald">Emerald</option>
-          <option value="orange">Orange</option>
-          <option value="indigo">Indigo</option>
-        </select>
-      </div>
-      <div class="flex gap-4 mt-8">
-        <button onclick="hideAddSubjectModal()" class="flex-1 py-4 border border-gray-300 rounded-2xl font-medium">Cancel</button>
-        <button onclick="addNewSubject()" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-semibold">Add Subject</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let isAdmin = false;
-    const colorClasses = {
-      blue: { text: 'text-blue-600', bg: 'bg-blue-600' },
-      purple: { text: 'text-purple-600', bg: 'bg-purple-600' },
-      pink: { text: 'text-pink-600', bg: 'bg-pink-600' },
-      emerald: { text: 'text-emerald-600', bg: 'bg-emerald-600' },
-      orange: { text: 'text-orange-600', bg: 'bg-orange-600' },
-      indigo: { text: 'text-indigo-600', bg: 'bg-indigo-600' }
-    };
-
-    async function checkAdmin() {
-      try {
-        const res = await fetch('/api/me', { credentials: 'include' });
-        const data = await res.json();
-        if (data.success) {
-          document.getElementById('user-name').textContent = data.user.name || 'Student';
-          if (data.user.role === 'admin') {
-            isAdmin = true;
-            document.getElementById('add-subject-btn').classList.remove('hidden');
-            document.getElementById('manage-dpp-btn').classList.remove('hidden');
-          }
-          return true;
-        } else {
-          window.location.href = '/login.html';
-          return false;
-        }
-      } catch (err) {
-        window.location.href = '/login.html';
-        return false;
-      }
-    }
-
-    async function fetchLecturesForSubject(subjectId, subjectName) {
-      try {
-        const res = await fetch(`/api/lectures?subjectId=${subjectId}`, { credentials: 'include' });
-        if (res.ok) {
-          const lectures = await res.json();
-          const total = lectures.length;
-          const completed = lectures.filter(l => l.completed === true).length;
-          return { total, completed };
-        } else {
-          console.warn(`Failed to fetch lectures for ${subjectName} (${subjectId})`);
-          return { total: 0, completed: 0 };
-        }
-      } catch (e) {
-        console.warn(`Error fetching lectures for ${subjectName}`, e);
-        return { total: 0, completed: 0 };
-      }
-    }
-
-    async function renderSubjects() {
-      const container = document.getElementById('subjects-container');
-      container.innerHTML = '<p class="col-span-3 text-center py-12 text-gray-500">Loading subjects...</p>';
-
-      try {
-        const res = await fetch('/api/subjects', { credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to fetch subjects');
-        let subjects = await res.json();
-
-        if (!subjects || subjects.length === 0) {
-          container.innerHTML = `<p class="col-span-3 text-center py-12 text-gray-500">No subjects available. ${
-            isAdmin ? 'Click "Add Subject" to create one.' : ''
-          }</p>`;
-          return;
+        async function checkAuth() {
+            const res = await fetch(`${API_BASE}/api/me`, { credentials: 'include' });
+            const data = await res.json();
+            if (!data.success) window.location.href = '/';
         }
 
-        // Process subjects sequentially to avoid overwhelming the server
-        let html = '';
-        for (let sub of subjects) {
-          const subjectId = sub._id || sub.id;
-          const { total, completed } = await fetchLecturesForSubject(subjectId, sub.name);
-          const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-          const color = sub.color || 'blue';
-          const icon = sub.icon || '📚';
-          const colorSet = colorClasses[color] || colorClasses.blue;
-
-          html += `
-            <div class="subject-card bg-white rounded-3xl p-8 border border-gray-100 relative">
-              ${isAdmin ? `<button onclick="deleteSubject('${subjectId}')" class="absolute top-4 right-4 text-red-500 hover:text-red-700 text-xl"><i class="fas fa-trash"></i></button>` : ''}
-              <div onclick="openSubject('${subjectId}', '${sub.name}')" class="cursor-pointer">
-                <div class="flex justify-between items-start mb-8">
-                  <div class="text-6xl">${icon}</div>
-                  <div class="text-right">
-                    <div class="text-sm text-gray-500">${total} Lectures</div>
-                    <div class="text-5xl font-bold ${colorSet.text} mt-1">${progress}%</div>
-                  </div>
-                </div>
-                <h3 class="text-2xl font-bold text-gray-800 mb-2">${sub.name}</h3>
-                <p class="text-gray-600 mb-8">Master concepts with high-quality lectures</p>
-                <div class="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div class="h-full ${colorSet.bg} rounded-full transition-all" style="width: ${progress}%"></div>
-                </div>
-              </div>
-            </div>`;
+        async function loadSubjects() {
+            const container = document.getElementById('subjectsContainer');
+            try {
+                const res = await fetch(`${API_BASE}/api/subjects`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.success && data.subjects.length > 0) {
+                    container.innerHTML = data.subjects.map(sub => `
+                        <div class="subject-card" onclick="window.location.href='lectures.html?subjectId=${sub._id}'">
+                            <div class="subject-icon">${sub.icon || '📚'}</div>
+                            <div class="subject-name">${sub.name}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p>No subjects available yet.</p>';
+                }
+            } catch (err) {
+                container.innerHTML = '<p class="error">Failed to load subjects.</p>';
+            }
         }
 
-        container.innerHTML = html;
-      } catch (err) {
-        console.error(err);
-        container.innerHTML = `<p class="col-span-3 text-center py-12 text-red-500">Could not load subjects from server.</p>`;
-      }
-    }
-
-    function openSubject(subjectId, subjectName) {
-      window.location.href = `/lectures.html?subjectId=${subjectId}&subjectName=${encodeURIComponent(subjectName)}`;
-    }
-
-    function showAddSubjectModal() {
-      document.getElementById('add-subject-modal').classList.remove('hidden');
-    }
-
-    function hideAddSubjectModal() {
-      document.getElementById('add-subject-modal').classList.add('hidden');
-    }
-
-    async function addNewSubject() {
-      const name = document.getElementById('new-subject-name').value.trim();
-      const icon = document.getElementById('new-subject-icon').value.trim() || "📚";
-      const colorSelect = document.getElementById('new-subject-color').value;
-
-      if (!name) {
-        alert("Please enter subject name");
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/subjects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ name, icon, color: colorSelect })
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await fetch(`${API_BASE}/api/logout`, { method: 'POST', credentials: 'include' });
+            window.location.href = '/';
         });
 
-        const data = await res.json();
-        if (data.success) {
-          alert(`✅ Subject "${name}" added successfully!`);
-          hideAddSubjectModal();
-          renderSubjects();
-        } else {
-          alert(data.msg || "Failed to add subject");
-        }
-      } catch (err) {
-        alert("Server error while adding subject.");
-      }
-    }
-
-    async function deleteSubject(subjectId) {
-      if (!confirm(`Delete this subject and all its lectures?`)) return;
-
-      try {
-        const res = await fetch(`/api/subjects/${subjectId}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          alert(`Subject deleted.`);
-          renderSubjects();
-        } else {
-          alert("Failed to delete subject");
-        }
-      } catch (err) {
-        alert("Server error while deleting subject");
-      }
-    }
-
-    async function logout() {
-      if (!confirm("Are you sure you want to logout?")) return;
-      try {
-        await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-        window.location.href = '/login.html';
-      } catch (err) {
-        alert("Logout failed.");
-      }
-    }
-
-    window.onload = async () => {
-      const authSuccess = await checkAdmin();
-      if (authSuccess) {
-        await renderSubjects();
-      }
-    };
-  </script>
+        checkAuth();
+        loadSubjects();
+    </script>
 </body>
 </html>
