@@ -127,6 +127,7 @@
         let html = '';
         for (let sub of subjects) {
           const subjectId = sub._id || sub.id;
+          console.log(`Loading subject: ${sub.name}, ID: ${subjectId}`);
           
           let total = 0, completed = 0;
           try {
@@ -135,6 +136,8 @@
               const lectures = await lecRes.json();
               total = lectures.length;
               completed = lectures.filter(l => l.completed === true).length;
+            } else {
+              console.warn(`Failed to load lectures for ${sub.name} (${subjectId})`);
             }
           } catch (e) {
             console.warn('Could not load lectures for', sub.name, e);
