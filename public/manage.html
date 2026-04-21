@@ -113,8 +113,9 @@
     "ans": 3,
     "diff": "MEDIUM"
   }
-]</pre>
-                </div>
+]
+        </pre>
+            </div>
             </div>
 
             <!-- ========== JSON UPLOAD TAB ========== -->
@@ -165,262 +166,314 @@
     </div>
 
     <script>
-        const ADMIN_PASSWORD = 'admin123';
-        let allSubjects = [];
-        let allLectures = [];
+    const ADMIN_PASSWORD = 'admin123';
+    let allSubjects = [];
+    let allLectures = [];
 
-        // Auth
-        document.getElementById('auth-btn').addEventListener('click', () => {
-            if (document.getElementById('admin-password').value === ADMIN_PASSWORD) {
-                document.getElementById('auth-section').classList.add('hidden');
-                document.getElementById('management-interface').classList.remove('hidden');
-                initializeManagement();
-            } else {
-                document.getElementById('auth-error').classList.remove('hidden');
-            }
+    // Auth
+    document.getElementById('auth-btn').addEventListener('click', () => {
+        if (document.getElementById('admin-password').value === ADMIN_PASSWORD) {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('management-interface').classList.remove('hidden');
+            initializeManagement();
+        } else {
+            document.getElementById('auth-error').classList.remove('hidden');
+        }
+    });
+
+    document.getElementById('admin-password').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') document.getElementById('auth-btn').click();
+    });
+
+    function initializeManagement() {
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active');
+                
+                if (btn.dataset.tab === 'editor') loadEditorLectures();
+                if (btn.dataset.tab === 'quick') loadSubjectsAndLectures();
+            });
         });
+        
+        setupJsonUpload();
+        setupQuickUpload();
+        loadSubjectsAndLectures(); // preload for quick tab (active by default)
+    }
 
-        function initializeManagement() {
-            // Tab switching
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    btn.classList.add('active');
-                    document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active');
-                    
-                    if (btn.dataset.tab === 'editor') loadEditorLectures();
-                    if (btn.dataset.tab === 'quick') loadSubjectsAndLectures();
-                });
+    // ========== LOAD SUBJECTS & LECTURES ==========
+    async function loadSubjectsAndLectures() {
+        try {
+            // Load subjects
+            const subRes = await fetch('/api/subjects', { credentials: 'include' });
+            if (!subRes.ok) throw new Error('Failed to load subjects');
+            allSubjects = await subRes.json();
+            
+            const subjectSelect = document.getElementById('quick-subject-select');
+            subjectSelect.innerHTML = '<option value="">-- Choose a subject --</option>';
+            allSubjects.forEach(sub => {
+                const opt = document.createElement('option');
+                opt.value = sub._id || sub.id;
+                opt.textContent = sub.name;
+                subjectSelect.appendChild(opt);
+            });
+
+            // Load all lectures
+            const lecRes = await fetch('/api/lectures', { credentials: 'include' });
+            if (!lecRes.ok) throw new Error('Failed to load lectures');
+            allLectures = await lecRes.json();
+            console.log('Lectures loaded:', allLectures.length);
+        } catch (err) {
+            console.error('Failed to load subjects/lectures', err);
+            alert('Error loading data. Make sure you are logged in as admin.');
+        }
+    }
+
+    // Filter lectures by subject
+    document.getElementById('quick-subject-select').addEventListener('change', (e) => {
+        const subjectId = e.target.value;
+        const lectureSelect = document.getElementById('quick-lecture-select');
+        lectureSelect.innerHTML = '<option value="">-- Select a lecture --</option>';
+        lectureSelect.disabled = !subjectId;
+        
+        if (subjectId) {
+            // Filter lectures that belong to this subject
+            const filtered = allLectures.filter(l => l.subjectId === subjectId || l.subject?._id === subjectId);
+            console.log(`Filtered lectures for subject ${subjectId}:`, filtered.length);
+            
+            filtered.forEach(lec => {
+                const opt = document.createElement('option');
+                opt.value = lec._id;
+                opt.textContent = lec.title;
+                lectureSelect.appendChild(opt);
             });
             
-            setupJsonUpload();
-            setupQuickUpload();
-            loadSubjectsAndLectures(); // preload for quick tab
-        }
-
-        // ========== LOAD SUBJECTS & LECTURES ==========
-        async function loadSubjectsAndLectures() {
-            try {
-                // Load subjects
-                const subRes = await fetch('/api/subjects', { credentials: 'include' });
-                allSubjects = await subRes.json();
-                const subjectSelect = document.getElementById('quick-subject-select');
-                subjectSelect.innerHTML = '<option value="">-- Choose a subject --</option>';
-                allSubjects.forEach(sub => {
-                    const opt = document.createElement('option');
-                    opt.value = sub._id;
-                    opt.textContent = sub.name;
-                    subjectSelect.appendChild(opt);
-                });
-
-                // Load all lectures (for later filtering)
-                const lecRes = await fetch('/api/lectures', { credentials: 'include' });
-                allLectures = await lecRes.json();
-            } catch (err) {
-                console.error('Failed to load subjects/lectures', err);
+            if (filtered.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'No lectures found for this subject';
+                opt.disabled = true;
+                lectureSelect.appendChild(opt);
             }
         }
+    });
 
-        // Filter lectures by subject
-        document.getElementById('quick-subject-select').addEventListener('change', (e) => {
-            const subjectId = e.target.value;
-            const lectureSelect = document.getElementById('quick-lecture-select');
-            lectureSelect.innerHTML = '<option value="">-- Select a lecture --</option>';
-            lectureSelect.disabled = !subjectId;
+    // ========== QUICK UPLOAD ==========
+    function setupQuickUpload() {
+        document.getElementById('quick-upload-btn').addEventListener('click', async () => {
+            const lectureId = document.getElementById('quick-lecture-select').value;
+            const questionsText = document.getElementById('quick-questions').value.trim();
+            const subjectOverride = document.getElementById('quick-subject').value.trim();
             
-            if (subjectId) {
-                const filtered = allLectures.filter(l => l.subjectId === subjectId);
-                filtered.forEach(lec => {
-                    const opt = document.createElement('option');
-                    opt.value = lec._id;
-                    opt.textContent = lec.title;
-                    lectureSelect.appendChild(opt);
+            if (!lectureId) {
+                alert('Please select a lecture');
+                return;
+            }
+            if (!questionsText) {
+                alert('Please paste the questions array');
+                return;
+            }
+            
+            let questions;
+            try {
+                questions = JSON.parse(questionsText);
+            } catch (e) {
+                alert('Invalid JSON in questions field: ' + e.message);
+                return;
+            }
+            
+            if (!Array.isArray(questions)) {
+                alert('Questions must be an array');
+                return;
+            }
+            
+            const selectedLecture = allLectures.find(l => l._id === lectureId);
+            const selectedSubject = allSubjects.find(s => (s._id || s.id) === document.getElementById('quick-subject-select').value);
+            
+            const payload = {
+                lectureId: lectureId,
+                lectureName: selectedLecture.title,
+                subject: subjectOverride || (selectedSubject ? selectedSubject.name : ''),
+                questions: questions
+            };
+            
+            const btn = document.getElementById('quick-upload-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
+            
+            const resultDiv = document.getElementById('quick-result');
+            
+            try {
+                const res = await fetch('/api/dpp/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    credentials: 'include'
                 });
+                const data = await res.json();
+                resultDiv.classList.remove('hidden');
+                if (res.ok) {
+                    resultDiv.className = 'mt-4 p-4 bg-green-50 border border-green-300 rounded';
+                    resultDiv.innerHTML = `<p class="font-medium text-green-800">✅ DPP uploaded successfully!</p>
+                                          <p class="text-sm mt-1">Lecture: ${selectedLecture.title}</p>
+                                          <p class="text-sm">Questions: ${questions.length}</p>`;
+                    // Clear form
+                    document.getElementById('quick-questions').value = '';
+                } else {
+                    resultDiv.className = 'mt-4 p-4 bg-red-50 border border-red-300 rounded';
+                    resultDiv.innerHTML = `<p class="font-medium text-red-800">❌ Upload failed</p>
+                                          <p class="text-sm">${data.error || 'Unknown error'}</p>`;
+                }
+            } catch (err) {
+                resultDiv.classList.remove('hidden');
+                resultDiv.className = 'mt-4 p-4 bg-red-50 border border-red-300 rounded';
+                resultDiv.innerHTML = `<p class="font-medium text-red-800">❌ Network error</p>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-2"></i>Upload DPP';
             }
         });
+    }
 
-        // ========== QUICK UPLOAD ==========
-        function setupQuickUpload() {
-            document.getElementById('quick-upload-btn').addEventListener('click', async () => {
-                const lectureId = document.getElementById('quick-lecture-select').value;
-                const questionsText = document.getElementById('quick-questions').value.trim();
-                const subjectOverride = document.getElementById('quick-subject').value.trim();
-                
-                if (!lectureId) {
-                    alert('Please select a lecture');
-                    return;
-                }
-                if (!questionsText) {
-                    alert('Please paste the questions array');
-                    return;
-                }
-                
-                let questions;
+    // ========== JSON UPLOAD ==========
+    function setupJsonUpload() {
+        const fileInput = document.getElementById('json-file');
+        const selectBtn = document.getElementById('select-file-btn');
+        const fileNameSpan = document.getElementById('file-name');
+        const uploadBtn = document.getElementById('upload-btn');
+        const resultDiv = document.getElementById('upload-result');
+        
+        selectBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) fileNameSpan.textContent = fileInput.files[0].name;
+        });
+        
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) { alert('Select a JSON file'); return; }
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
                 try {
-                    questions = JSON.parse(questionsText);
-                } catch (e) {
-                    alert('Invalid JSON in questions field: ' + e.message);
-                    return;
-                }
-                
-                if (!Array.isArray(questions)) {
-                    alert('Questions must be an array');
-                    return;
-                }
-                
-                const selectedLecture = allLectures.find(l => l._id === lectureId);
-                const selectedSubject = allSubjects.find(s => s._id === document.getElementById('quick-subject-select').value);
-                
-                const payload = {
-                    lectureId: lectureId,
-                    lectureName: selectedLecture.title,
-                    subject: subjectOverride || (selectedSubject ? selectedSubject.name : ''),
-                    questions: questions
-                };
-                
-                const btn = document.getElementById('quick-upload-btn');
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
-                
-                const resultDiv = document.getElementById('quick-result');
-                
-                try {
+                    const json = JSON.parse(e.target.result);
+                    uploadBtn.disabled = true;
+                    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
+                    
                     const res = await fetch('/api/dpp/upload', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify(json),
+                        credentials: 'include'
                     });
                     const data = await res.json();
                     resultDiv.classList.remove('hidden');
-                    if (res.ok) {
-                        resultDiv.className = 'mt-4 p-4 bg-green-50 border border-green-300 rounded';
-                        resultDiv.innerHTML = `<p class="font-medium text-green-800">✅ DPP uploaded successfully!</p>
-                                              <p class="text-sm mt-1">Lecture: ${selectedLecture.title}</p>
-                                              <p class="text-sm">Questions: ${questions.length}</p>`;
-                    } else {
-                        resultDiv.className = 'mt-4 p-4 bg-red-50 border border-red-300 rounded';
-                        resultDiv.innerHTML = `<p class="font-medium text-red-800">❌ Upload failed</p>
-                                              <p class="text-sm">${data.error || 'Unknown error'}</p>`;
-                    }
+                    resultDiv.querySelector('pre').textContent = JSON.stringify(data, null, 2);
+                    resultDiv.className = res.ok ? 'mt-4 p-4 bg-green-50 rounded border border-green-300' : 'mt-4 p-4 bg-red-50 rounded border border-red-300';
                 } catch (err) {
-                    resultDiv.classList.remove('hidden');
-                    resultDiv.className = 'mt-4 p-4 bg-red-50 border border-red-300 rounded';
-                    resultDiv.innerHTML = `<p class="font-medium text-red-800">❌ Network error</p>`;
+                    alert('Invalid JSON: ' + err.message);
                 } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-2"></i>Upload DPP';
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-2"></i>Upload & Save';
                 }
-            });
-        }
-
-        // ========== JSON UPLOAD (existing) ==========
-        function setupJsonUpload() {
-            const fileInput = document.getElementById('json-file');
-            const selectBtn = document.getElementById('select-file-btn');
-            const fileNameSpan = document.getElementById('file-name');
-            const uploadBtn = document.getElementById('upload-btn');
-            const resultDiv = document.getElementById('upload-result');
-            
-            selectBtn.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', () => {
-                if (fileInput.files.length > 0) fileNameSpan.textContent = fileInput.files[0].name;
-            });
-            
-            uploadBtn.addEventListener('click', async () => {
-                const file = fileInput.files[0];
-                if (!file) { alert('Select a JSON file'); return; }
-                
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    try {
-                        const json = JSON.parse(e.target.result);
-                        uploadBtn.disabled = true;
-                        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
-                        
-                        const res = await fetch('/api/dpp/upload', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(json)
-                        });
-                        const data = await res.json();
-                        resultDiv.classList.remove('hidden');
-                        resultDiv.querySelector('pre').textContent = JSON.stringify(data, null, 2);
-                        resultDiv.className = res.ok ? 'mt-4 p-4 bg-green-50 rounded border border-green-300' : 'mt-4 p-4 bg-red-50 rounded border border-red-300';
-                    } catch (err) {
-                        alert('Invalid JSON: ' + err.message);
-                    } finally {
-                        uploadBtn.disabled = false;
-                        uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-2"></i>Upload & Save';
-                    }
-                };
-                reader.readAsText(file);
-            });
-        }
-
-        // ========== QUESTION EDITOR (simplified - existing logic) ==========
-        async function loadEditorLectures() {
-            const select = document.getElementById('editor-lecture-select');
-            if (select.options.length > 1) return;
-            try {
-                const res = await fetch('/api/dpp/lectures');
-                const lectures = await res.json();
-                lectures.forEach(lec => {
-                    const option = document.createElement('option');
-                    option.value = lec.lectureId;
-                    option.textContent = lec.lectureName;
-                    select.appendChild(option);
-                });
-            } catch (err) {
-                console.error('Failed to load lectures:', err);
-            }
-        }
-
-        document.getElementById('editor-lecture-select').addEventListener('change', async (e) => {
-            const lectureId = e.target.value;
-            const container = document.getElementById('editor-form-container');
-            if (!lectureId) { container.innerHTML = ''; return; }
-            container.innerHTML = '<p class="text-gray-500">Loading...</p>';
-            try {
-                const res = await fetch(`/api/dpp/${lectureId}`);
-                if (!res.ok) throw new Error('DPP not found');
-                const dpp = await res.json();
-                renderEditorForm(dpp);
-            } catch (err) {
-                container.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
-            }
+            };
+            reader.readAsText(file);
         });
+    }
 
-        function renderEditorForm(dpp) {
-            let html = `<div class="border-t pt-4"><h3 class="text-lg font-medium mb-4">Editing: ${dpp.lectureName}</h3>`;
-            dpp.questions.forEach((q, i) => {
-                html += `<div class="border rounded-lg p-4 mb-4 bg-gray-50">
-                    <p class="font-medium">Q${i+1}: <input type="text" data-field="text" value="${q.questionText.replace(/"/g, '&quot;')}" class="w-full p-2 border rounded mt-1"></p>`;
-                q.options.forEach((opt, oi) => {
-                    html += `<input type="text" data-field="opt${oi}" value="${opt.replace(/"/g, '&quot;')}" class="w-full p-2 border rounded mb-1 ml-4">`;
-                });
-                html += `<p class="mt-2">Correct: <input type="number" data-field="correct" value="${q.correctAnswer}" min="0" max="${q.options.length-1}" class="w-20 p-1 border rounded"></p>
-                    <p>Difficulty: 
-                        <select data-field="diff" class="border rounded p-1">
-                            <option ${q.difficulty==='EASY'?'selected':''}>EASY</option>
-                            <option ${q.difficulty==='MEDIUM'?'selected':''}>MEDIUM</option>
-                            <option ${q.difficulty==='HARD'?'selected':''}>HARD</option>
-                        </select>
-                    </p>
-                    <p>Date: <input type="text" data-field="date" value="${q.date || ''}" class="border rounded p-1"></p>
-                </div>`;
+    // ========== QUESTION EDITOR ==========
+    async function loadEditorLectures() {
+        const select = document.getElementById('editor-lecture-select');
+        if (select.options.length > 1) return;
+        try {
+            const res = await fetch('/api/dpp/lectures', { credentials: 'include' });
+            const lectures = await res.json();
+            lectures.forEach(lec => {
+                const option = document.createElement('option');
+                option.value = lec.lectureId;
+                option.textContent = lec.lectureName;
+                select.appendChild(option);
             });
-            html += `<button id="save-edits" class="bg-blue-600 text-white px-6 py-2 rounded">Save Changes</button></div>`;
-            container.innerHTML = html;
-            document.getElementById('save-edits').addEventListener('click', () => saveEditorChanges(dpp.lectureId));
+        } catch (err) {
+            console.error('Failed to load lectures:', err);
         }
+    }
 
-        async function saveEditorChanges(lectureId) {
-            const container = document.getElementById('editor-form-container');
-            const questionDivs = container.querySelectorAll('[data-question-id]');
-            // Implement saving logic similar to before (omitted for brevity)
-            alert('Save functionality updated – see full code if needed.');
+    document.getElementById('editor-lecture-select').addEventListener('change', async (e) => {
+        const lectureId = e.target.value;
+        const container = document.getElementById('editor-form-container');
+        if (!lectureId) { container.innerHTML = ''; return; }
+        container.innerHTML = '<p class="text-gray-500">Loading...</p>';
+        try {
+            const res = await fetch(`/api/dpp/${lectureId}`, { credentials: 'include' });
+            if (!res.ok) throw new Error('DPP not found');
+            const dpp = await res.json();
+            renderEditorForm(dpp);
+        } catch (err) {
+            container.innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
         }
-    </script>
+    });
+
+    function renderEditorForm(dpp) {
+        let html = `<div class="border-t pt-4"><h3 class="text-lg font-medium mb-4">Editing: ${dpp.lectureName}</h3>`;
+        dpp.questions.forEach((q, i) => {
+            html += `<div class="border rounded-lg p-4 mb-4 bg-gray-50" data-question-id="${q.id}">
+                <p class="font-medium">Q${i+1}: <input type="text" data-field="text" value="${q.questionText.replace(/"/g, '&quot;')}" class="w-full p-2 border rounded mt-1"></p>`;
+            q.options.forEach((opt, oi) => {
+                html += `<input type="text" data-field="opt${oi}" value="${opt.replace(/"/g, '&quot;')}" class="w-full p-2 border rounded mb-1 ml-4">`;
+            });
+            html += `<p class="mt-2">Correct: <input type="number" data-field="correct" value="${q.correctAnswer}" min="0" max="${q.options.length-1}" class="w-20 p-1 border rounded"></p>
+                <p>Difficulty: 
+                    <select data-field="diff" class="border rounded p-1">
+                        <option ${q.difficulty==='EASY'?'selected':''}>EASY</option>
+                        <option ${q.difficulty==='MEDIUM'?'selected':''}>MEDIUM</option>
+                        <option ${q.difficulty==='HARD'?'selected':''}>HARD</option>
+                    </select>
+                </p>
+                <p>Date: <input type="text" data-field="date" value="${q.date || ''}" class="border rounded p-1"></p>
+            </div>`;
+        });
+        html += `<button id="save-edits" class="bg-blue-600 text-white px-6 py-2 rounded">Save Changes</button></div>`;
+        container.innerHTML = html;
+        document.getElementById('save-edits').addEventListener('click', () => saveEditorChanges(dpp.lectureId));
+    }
+
+    async function saveEditorChanges(lectureId) {
+        const container = document.getElementById('editor-form-container');
+        const questionDivs = container.querySelectorAll('[data-question-id]');
+        const updatedQuestions = [];
+        questionDivs.forEach(div => {
+            const id = div.dataset.questionId;
+            const text = div.querySelector('[data-field="text"]').value;
+            const options = [];
+            for (let i = 0; i < 10; i++) {
+                const optInput = div.querySelector(`[data-field="opt${i}"]`);
+                if (optInput) options.push(optInput.value);
+            }
+            const correct = parseInt(div.querySelector('[data-field="correct"]').value);
+            const diff = div.querySelector('[data-field="diff"]').value;
+            const date = div.querySelector('[data-field="date"]').value;
+            updatedQuestions.push({ id, questionText: text, options, correctAnswer: correct, difficulty: diff, date });
+        });
+        try {
+            const res = await fetch(`/api/dpp/${lectureId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ questions: updatedQuestions }),
+                credentials: 'include'
+            });
+            if (res.ok) {
+                alert('Changes saved!');
+            } else {
+                alert('Failed to save changes');
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+</script>
+    
 </body>
     </html>
