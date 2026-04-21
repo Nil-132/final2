@@ -390,6 +390,22 @@ app.put('/api/lectures/:id', authenticate, isAdmin, async (req, res) => {
   res.json(lecture || { success: false });
 });
 
+// ========== VIEW ROUTES (for EJS templates) ==========
+
+// Progress page - renders DPP analytics
+app.get('/progress', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.redirect('/login.html');
+    }
+    res.render('progress', { user, title: 'Progress Report' });
+  } catch (err) {
+    console.error('Progress page error:', err);
+    res.status(500).send('Server error');
+  }
+});
+
 // Catch-all: serve index.html for any unknown route (optional, but keeps SPA behaviour)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
