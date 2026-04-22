@@ -125,8 +125,8 @@ app.post('/api/signup', [
         if (!otpRecord || otpRecord.otp !== otp) return res.status(400).json({ success: false, msg: 'Invalid OTP' });
         const existing = await User.findOne({ email });
         if (existing) return res.status(400).json({ success: false, msg: 'Email already registered' });
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await User.create({ name, email, password: hashedPassword, isVerified: true });
+        //const hashedPassword = await bcrypt.hash(password, 10);
+        const user = await User.create({ name, email, password, isVerified: true });
         await Otp.deleteOne({ email });
         const token = jwt.sign({ id: user._id, role: user.role, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
         res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
@@ -449,7 +449,8 @@ app.post('/api/reset-password', async (req, res) => {
     const { token, newPassword } = req.body;
     const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
     if (!user) return res.status(400).json({ success: false, msg: 'Invalid or expired token' });
-    user.password = await bcrypt.hash(newPassword, 10);
+    //user.password = await bcrypt.hash(newPassword, 10);
+    user.password = newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
@@ -460,8 +461,8 @@ app.post('/api/reset-password', async (req, res) => {
 async function seedAdmin() {
     const existing = await User.findOne({ role: 'admin' });
     if (!existing && process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
-        const hashed = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
-        await User.create({ name: 'Admin', email: process.env.ADMIN_EMAIL, password: hashed, role: 'admin', isVerified: true });
+        //const hashed = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+        await User.create({ name: 'Admin', email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD, role: 'admin', isVerified: true });
         console.log('✅ Admin seeded');
     }
 }
