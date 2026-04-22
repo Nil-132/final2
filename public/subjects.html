@@ -112,7 +112,6 @@
       indigo: { text: 'text-indigo-600', bg: 'bg-indigo-600' }
     };
 
-    // Debug flag – set to false in production
     const DEBUG = true;
     function log(...args) { if (DEBUG) console.log(...args); }
 
@@ -156,7 +155,11 @@
 
       try {
         log('📚 renderSubjects: fetching subjects');
-        const subjectsRes = await fetch('/api/subjects?_=' + Date.now(), { credentials: 'include' });
+        // 🆕 Use cache: 'no-cache' to force revalidation even with cache-busting param
+        const subjectsRes = await fetch('/api/subjects?_=' + Date.now(), { 
+          credentials: 'include',
+          cache: 'no-cache'
+        });
         if (!subjectsRes.ok) throw new Error('Failed to fetch subjects');
         const subjects = await subjectsRes.json();
         log(`📚 got ${subjects.length} subjects`);
@@ -169,14 +172,25 @@
         }
 
         // Fetch lectures in parallel
-        const lecturePromises = subjects.map(sub =>
-          fetch(`/api/lectures?subjectId=${sub._id || sub.id}&_=${Date.now()}`, { credentials: 'include' })
-            .then(res => res.ok ? res.json() : [])
-            .catch(() => [])
-        );
+        const lecturePromises = subjects.map(sub => {
+          const url = `/api/lectures?subjectId=${sub._id || sub.id}&_=${Date.now()}`;
+          log(`📡 Fetching lectures for ${sub.name}: ${url}`);
+          return fetch(url, { 
+            credentials: 'include',
+            cache: 'no-cache'               // 🆕 Force revalidation
+          })
+            .then(res => {
+              log(`📡 Response for ${sub.name}: status ${res.status}`);
+              return res.ok ? res.json() : [];
+            })
+            .catch(err => {
+              log(`❌ Error fetching lectures for ${sub.name}:`, err);
+              return [];
+            });
+        });
 
         const lecturesArrays = await Promise.all(lecturePromises);
-        log('📚 lectures fetched');
+        log('📚 lectures fetched, counts:', lecturesArrays.map(arr => arr.length));
 
         let html = '';
         for (let i = 0; i < subjects.length; i++) {
@@ -290,69 +304,57 @@
       }
     }
 
-    // ---------- ROBUST PAGE INITIALIZATION ----------
-    let hasInitialized = false;
+    // ---------- ROBUST PAGE INITIALIZATION (FIXED) ----------
+    let isInitialized = false;
 
     async function initializePage() {
-      if (hasInitialized) {
-        log('⏩ initializePage skipped (already initialized)');
-        return;
+      log('🚀 initializePage called');
+      const authSuccess = await checkAdmin();
+      if (authSuccess) {
+        await renderSubjects();
       }
-      hasInitialized = true;
-      log('🚀 initializePage started');
-      try {
-        const authSuccess = await checkAdmin();
-        if (authSuccess) {
-          await renderSubjects();
-        }
-      } catch (err) {
-        console.error('❌ initializePage error:', err);
-      }
+      isInitialized = true;
     }
 
-    // Reset initialization flag when page is shown from bfcache
-    function resetAndInitialize() {
-      log('🔄 resetAndInitialize called');
-      hasInitialized = false;
-      initializePage();
-    }
-
-    // Event listeners for all possible navigation scenarios
-    window.addEventListener('load', () => {
-      log('🟢 load event fired');
-      initializePage();
-    });
-
-    window.addEventListener('pageshow', (event) => {
-      log(`🔵 pageshow event fired, persisted: ${event.persisted}`);
+    // 🆕 Force a complete refresh when page is restored from bfcache
+    function handlePageShow(event) {
+      log(`🔵 pageshow event, persisted: ${event.persisted}`);
       if (event.persisted) {
-        resetAndInitialize();
-      } else {
-        // Even if not persisted, ensure initialization (load might have missed)
-        if (!hasInitialized) initializePage();
+        // Page was restored from bfcache – fetch data again
+        log('🔄 Page restored from bfcache, re-fetching data');
+        renderSubjects();  // Directly call renderSubjects (auth already checked)
       }
-    });
+    }
 
-    // Fallback: when the page becomes visible after being hidden
-    document.addEventListener('visibilitychange', () => {
+    // 🆕 When the page becomes visible after being hidden, refresh data
+    function handleVisibilityChange() {
       if (document.visibilityState === 'visible') {
-        log('👁️ visibilitychange: page is visible');
-        // Only re-fetch if we suspect the data is stale
-        if (!hasInitialized) {
-          initializePage();
-        } else {
-          // Optional: force refresh if you want always-fresh data
-          // renderSubjects();
-        }
+        log('👁️ Page became visible, refreshing data');
+        renderSubjects();
       }
+    }
+
+    // Initial load
+    window.addEventListener('load', () => {
+      log('🟢 load event');
+      initializePage();
     });
 
-    // Also handle the case where the page is already loaded but scripts are re-run
+    // Back/forward cache restoration
+    window.addEventListener('pageshow', handlePageShow);
+
+    // Tab visibility change
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // If the script runs after the page is already fully loaded
     if (document.readyState === 'complete') {
-      log('📄 document already complete, initializing');
+      log('📄 Document already complete, initializing');
       initializePage();
     }
-</script>
-  
+
+    // 🆕 Optional: If you still experience issues, uncomment the next line
+    // to force a full reload when restored from bfcache (guaranteed fix)
+    // window.addEventListener('pageshow', (e) => { if (e.persisted) window.location.reload(); });
+</script>  
   </body>
 </html>
