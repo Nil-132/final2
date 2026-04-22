@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
     role: { type: String, enum: ['admin', 'student'], default: 'student' },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
     // Add these fields to the existing userSchema
     popupLastShown: { type: Date, default: null },
     popupWeek: { type: Number, default: 0 }
