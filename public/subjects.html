@@ -101,7 +101,7 @@
     </div>
   </div>
 
-  <script>
+<script>
     let isAdmin = false;
     const colorClasses = {
       blue: { text: 'text-blue-600', bg: 'bg-blue-600' },
@@ -111,6 +111,10 @@
       orange: { text: 'text-orange-600', bg: 'bg-orange-600' },
       indigo: { text: 'text-indigo-600', bg: 'bg-indigo-600' }
     };
+
+    // Debug flag – set to false in production
+    const DEBUG = true;
+    function log(...args) { if (DEBUG) console.log(...args); }
 
     function showToast(message, type = 'info') {
       const toast = document.createElement('div');
@@ -122,8 +126,10 @@
 
     async function checkAdmin() {
       try {
+        log('🔐 checkAdmin: calling /api/me');
         const res = await fetch('/api/me', { credentials: 'include' });
         const data = await res.json();
+        log('🔐 checkAdmin response:', data);
         if (data.success) {
           document.getElementById('user-name').textContent = data.user.name || 'Student';
           if (data.user.role === 'admin') {
@@ -133,10 +139,12 @@
           }
           return true;
         } else {
+          log('❌ checkAdmin failed, redirecting to login');
           window.location.href = '/login.html';
           return false;
         }
       } catch (err) {
+        log('❌ checkAdmin error:', err);
         window.location.href = '/login.html';
         return false;
       }
@@ -147,10 +155,11 @@
       container.innerHTML = '<p class="col-span-3 text-center py-12 text-gray-500">Loading subjects...</p>';
 
       try {
-        // Cache busting
+        log('📚 renderSubjects: fetching subjects');
         const subjectsRes = await fetch('/api/subjects?_=' + Date.now(), { credentials: 'include' });
         if (!subjectsRes.ok) throw new Error('Failed to fetch subjects');
         const subjects = await subjectsRes.json();
+        log(`📚 got ${subjects.length} subjects`);
 
         if (!subjects || subjects.length === 0) {
           container.innerHTML = `<p class="col-span-3 text-center py-12 text-gray-500">No subjects available. ${
@@ -159,7 +168,7 @@
           return;
         }
 
-        // Fetch all lectures in parallel
+        // Fetch lectures in parallel
         const lecturePromises = subjects.map(sub =>
           fetch(`/api/lectures?subjectId=${sub._id || sub.id}&_=${Date.now()}`, { credentials: 'include' })
             .then(res => res.ok ? res.json() : [])
@@ -167,6 +176,7 @@
         );
 
         const lecturesArrays = await Promise.all(lecturePromises);
+        log('📚 lectures fetched');
 
         let html = '';
         for (let i = 0; i < subjects.length; i++) {
@@ -199,14 +209,14 @@
             </div>`;
         }
         container.innerHTML = html;
+        log('✅ renderSubjects completed');
       } catch (err) {
-        console.error(err);
+        console.error('renderSubjects error:', err);
         container.innerHTML = `<p class="col-span-3 text-center py-12 text-red-500">Could not load subjects. Please refresh the page.</p>`;
       }
     }
 
     function openSubject(subjectId, subjectName) {
-      // Add timestamp to prevent caching on navigation
       window.location.href = `/lectures.html?subjectId=${subjectId}&subjectName=${encodeURIComponent(subjectName)}&_=${Date.now()}`;
     }
 
@@ -280,21 +290,69 @@
       }
     }
 
-    async function initializePage() {
-  const authSuccess = await checkAdmin();
-  if (authSuccess) {
-    await renderSubjects();
-  }
-}
+    // ---------- ROBUST PAGE INITIALIZATION ----------
+    let hasInitialized = false;
 
-// Handle both initial load and bfcache restoration
-window.addEventListener('load', initializePage);
-window.addEventListener('pageshow', (event) => {
-  // event.persisted is true if the page was restored from bfcache
-  if (event.persisted) {
-    initializePage();
-  }
-});
-  </script>
-</body>
+    async function initializePage() {
+      if (hasInitialized) {
+        log('⏩ initializePage skipped (already initialized)');
+        return;
+      }
+      hasInitialized = true;
+      log('🚀 initializePage started');
+      try {
+        const authSuccess = await checkAdmin();
+        if (authSuccess) {
+          await renderSubjects();
+        }
+      } catch (err) {
+        console.error('❌ initializePage error:', err);
+      }
+    }
+
+    // Reset initialization flag when page is shown from bfcache
+    function resetAndInitialize() {
+      log('🔄 resetAndInitialize called');
+      hasInitialized = false;
+      initializePage();
+    }
+
+    // Event listeners for all possible navigation scenarios
+    window.addEventListener('load', () => {
+      log('🟢 load event fired');
+      initializePage();
+    });
+
+    window.addEventListener('pageshow', (event) => {
+      log(`🔵 pageshow event fired, persisted: ${event.persisted}`);
+      if (event.persisted) {
+        resetAndInitialize();
+      } else {
+        // Even if not persisted, ensure initialization (load might have missed)
+        if (!hasInitialized) initializePage();
+      }
+    });
+
+    // Fallback: when the page becomes visible after being hidden
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        log('👁️ visibilitychange: page is visible');
+        // Only re-fetch if we suspect the data is stale
+        if (!hasInitialized) {
+          initializePage();
+        } else {
+          // Optional: force refresh if you want always-fresh data
+          // renderSubjects();
+        }
+      }
+    });
+
+    // Also handle the case where the page is already loaded but scripts are re-run
+    if (document.readyState === 'complete') {
+      log('📄 document already complete, initializing');
+      initializePage();
+    }
+</script>
+  
+  </body>
 </html>
