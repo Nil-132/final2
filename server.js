@@ -33,6 +33,14 @@ app.use(cors({
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
 
+// 🆕 Disable caching for all API routes – prevents stale data after bfcache
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // ========== NODEMAILER ==========
 const transporter = nodemailer.createTransport({
     service: 'gmail',
